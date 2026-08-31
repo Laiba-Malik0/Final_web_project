@@ -7,7 +7,7 @@ import confetti from 'canvas-confetti';
 import { Bot, Send, CheckCircle, Sparkles, User, Shield, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const socket = io('https://final-web-backend-eta.vercel.app');
+const socket = io('https://final-web-backend-eta.vercel.app/api');
 
 export default function TicketDetail() {
   const { id } = useParams();
