@@ -1,421 +1,555 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { 
-  Plus, Ticket, Clock, CheckCircle2, AlertCircle, Edit2, 
-  Trash2, X, User, MessageSquare, Sparkles, RefreshCw, Send, Tag, FileText
-} from 'lucide-react';
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import gsap from "gsap";
+import API from "../api/index";
 
-axios.defaults.baseURL = 'http://localhost:5000';
+function CustomerDashboard() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("home");
+  const [workers, setWorkers] = useState([]);
+  const [myTickets, setMyTickets] = useState([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-const CustomerDashboard = () => {
-  const [user, setUser] = useState({});
-  const [tickets, setTickets] = useState([]);
-  
-  // State for controlling Complaint Form Modal
-  const [showModal, setShowModal] = useState(false);
-  const [editingTicket, setEditingTicket] = useState(null);
-  
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  // Form State (Create & Edit)
+  const [showForm, setShowForm] = useState(false);
+  const [editingTicketId, setEditingTicketId] = useState(null); // Track if Editing
+  const [formData, setFormData] = useState({
+    title: "",
+    category: "Electrical",
+    priority: "Normal",
+    description: "",
+    assignedWorker: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState({ type: "", text: "" });
 
-  // Form Input States
-  const [category, setCategory] = useState('');
-  const [workerName, setWorkerName] = useState('');
-  const [description, setDescription] = useState('');
+  const modalRef = useRef(null);
 
   useEffect(() => {
-    try {
-      const savedUser = localStorage.getItem('user');
-      if (savedUser) setUser(JSON.parse(savedUser));
-    } catch (e) {
-      console.error('LocalStorage User Parse Error:', e);
+    const userData = JSON.parse(localStorage.getItem("user"));
+    if (!userData) {
+      navigate("/");
+    } else {
+      setUser(userData);
+      fetchWorkers();
+      fetchMyTickets();
     }
   }, []);
 
+  // GSAP Modal Animation
   useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const getAuthHeader = () => {
-    const token = localStorage.getItem('token');
-    return { headers: { Authorization: `Bearer ${token}` } };
-  };
-
-  const loadDashboardData = async () => {
-    setLoading(true);
-    setErrorMessage('');
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      setErrorMessage('Authorization token missing. Please log in again.');
-      setLoading(false);
-      return;
+    if (showForm && modalRef.current) {
+      gsap.fromTo(
+        modalRef.current,
+        { scale: 0.85, opacity: 0, y: 30 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.4)" }
+      );
     }
+  }, [showForm]);
 
+  // Toast Auto Hide
+  useEffect(() => {
+    if (msg.text) {
+      const timer = setTimeout(() => setMsg({ type: "", text: "" }), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [msg]);
+
+  const fetchWorkers = async () => {
     try {
-      const ticketsRes = await axios.get('/api/tickets/my-tickets', getAuthHeader());
-      setTickets(Array.isArray(ticketsRes.data) ? ticketsRes.data : []);
+      const res = await API.get("/auth/workers");
+      setWorkers(res.data || []);
+      if (res.data?.length > 0 && !editingTicketId) {
+        setFormData((prev) => ({ ...prev, assignedWorker: res.data[0]._id }));
+      }
     } catch (err) {
-      console.error('Fetch Error:', err);
-      const msg = err.response?.data?.error || err.response?.data?.message || err.message;
-      setErrorMessage(msg);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching workers:", err);
     }
   };
 
-  // Submit Complaint Form
-  const handleSubmit = async (e) => {
+  const fetchMyTickets = async () => {
+    try {
+      const res = await API.get("/tickets/customer-tickets");
+      setMyTickets(res.data || []);
+    } catch (err) {
+      console.error("Error fetching tickets:", err);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/");
+  };
+
+  // Open Form for Creating New Ticket
+  const handleOpenCreateForm = () => {
+    setEditingTicketId(null);
+    setFormData({
+      title: "",
+      category: "Electrical",
+      priority: "Normal",
+      description: "",
+      assignedWorker: workers[0]?._id || "",
+    });
+    setShowForm(true);
+  };
+
+  // Open Form for Editing Existing Ticket
+  const handleOpenEditForm = (ticket) => {
+    setEditingTicketId(ticket._id);
+    setFormData({
+      title: ticket.title || "",
+      category: ticket.category || "Electrical",
+      priority: ticket.priority || "Normal",
+      description: ticket.description || "",
+      assignedWorker: ticket.assignedWorker?._id || ticket.assignedWorker || "",
+    });
+    setShowForm(true);
+  };
+
+  // Delete Ticket Handler
+  const handleDeleteTicket = async (ticketId) => {
+    if (!window.confirm("Are you sure you want to delete this ticket?")) return;
+
+    try {
+      await API.delete(`/tickets/${ticketId}`);
+      setMsg({ type: "success", text: "Ticket deleted successfully!" });
+      setMyTickets((prev) => prev.filter((t) => t._id !== ticketId));
+    } catch (err) {
+      setMsg({
+        type: "error",
+        text: err.response?.data?.message || "Failed to delete ticket",
+      });
+    }
+  };
+
+  // Submit Form (Handles Create & Update)
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    setLoading(true);
+    setMsg({ type: "", text: "" });
+
     try {
-      if (editingTicket) {
-        // Edit Complaint
-        await axios.put(`/api/tickets/update/${editingTicket._id}`, { 
-          category, 
-          workerName, 
-          description 
-        }, getAuthHeader());
+      if (editingTicketId) {
+        // UPDATE TICKET
+        const res = await API.put(`/tickets/${editingTicketId}`, formData);
+        if (res.status === 200) {
+          setMsg({ type: "success", text: "Ticket updated successfully!" });
+        }
       } else {
-        // Create Complaint with User Name, Category, Worker Name & Description
-        await axios.post('/api/tickets/create', { 
-          userName: user?.name || 'Customer',
-          category, 
-          workerName, 
-          description 
-        }, getAuthHeader());
+        // CREATE TICKET
+        const res = await API.post("/tickets/create", formData);
+        if (res.status === 201 || res.status === 200) {
+          setMsg({ type: "success", text: "Ticket submitted successfully!" });
+        }
       }
-      
-      setShowModal(false);
-      resetForm();
-      loadDashboardData();
+      setShowForm(false);
+      fetchMyTickets();
     } catch (err) {
-      alert(err.response?.data?.error || err.response?.data?.message || 'Failed to submit complaint');
+      setMsg({
+        type: "error",
+        text: err.response?.data?.message || "Operation failed",
+      });
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this complaint?')) {
-      try {
-        await axios.delete(`/api/tickets/delete/${id}`, getAuthHeader());
-        setTickets(tickets.filter((t) => t._id !== id));
-      } catch (err) {
-        alert('Failed to delete ticket');
-      }
-    }
-  };
-
-  const handleEdit = (ticket) => {
-    setEditingTicket(ticket);
-    setCategory(ticket.category || '');
-    setWorkerName(ticket.workerName || ticket.assignedWorkerName || '');
-    setDescription(ticket.description || '');
-    setShowModal(true);
-  };
-
-  const resetForm = () => {
-    setCategory('');
-    setWorkerName('');
-    setDescription('');
-    setEditingTicket(null);
-  };
-
-  const getStatusBadge = (status) => {
-    const s = status ? status.toUpperCase() : 'OPEN';
-    switch (s) {
-      case 'CLOSED':
-      case 'RESOLVED':
-        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-      case 'IN_PROGRESS':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+  const getStatusStyle = (status) => {
+    switch (status?.toLowerCase()) {
+      case "completed":
+        return {
+          bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+          sensor: "bg-emerald-500 shadow-[0_0_8px_#10B981]",
+        };
+      case "in progress":
+      case "accepted":
+        return {
+          bg: "bg-sky-500/10 border-sky-500/30 text-sky-400",
+          sensor: "bg-sky-500 shadow-[0_0_8px_#0EA5E9]",
+        };
+      case "rejected":
+        return {
+          bg: "bg-rose-500/10 border-rose-500/30 text-rose-400",
+          sensor: "bg-rose-500 shadow-[0_0_8px_#F43F5E]",
+        };
       default:
-        return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+        return {
+          bg: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+          sensor: "bg-amber-500 shadow-[0_0_8px_#F59E0B] animate-pulse",
+        };
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white relative overflow-hidden">
-      
-      {/* Background Lighting Effects */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-[128px]" />
-        <div className="absolute top-1/2 -right-40 w-96 h-96 bg-purple-600/10 rounded-full blur-[128px]" />
+    <div className="min-h-screen bg-[#0A0706] text-[#E8D8C8] flex font-sans overflow-hidden">
+      {/* Mobile Toggle Button */}
+      <div className="md:hidden fixed top-4 right-4 z-50">
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2.5 bg-[#140D0A] border border-[#2C1C14] text-[#C5A059] rounded-xl text-xl shadow-lg"
+        >
+          {isMobileMenuOpen ? "✕" : "☰"}
+        </button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
-        
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="mb-6 bg-rose-500/10 border border-rose-500/30 text-rose-300 p-4 rounded-2xl flex items-center gap-3 backdrop-blur-md">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <p className="text-sm font-medium">{errorMessage}</p>
+      {/* ---------------- LEFT SIDEBAR ---------------- */}
+      <aside
+        className={`fixed top-0 left-0 h-screen w-64 bg-[#140D0A] border-r border-[#2C1C14] p-6 flex flex-col justify-between z-40 transition-transform duration-300 md:translate-x-0 ${
+          isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        <div className="space-y-8">
+          <div className="flex items-center space-x-3 px-2">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#C5A059] to-[#E3C896] text-[#0F0A08] flex items-center justify-center font-black text-lg shadow-[0_0_15px_rgba(197,160,89,0.3)]">
+              S
+            </div>
+            <div>
+              <h2 className="font-extrabold text-base tracking-wider text-[#E8D8C8]">SUPPORT</h2>
+              <p className="text-[10px] text-[#C5A059] tracking-widest font-bold">PORTAL</p>
+            </div>
           </div>
-        )}
 
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 pb-8 border-b border-slate-800/80">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" /> Support Portal
+          <div className="bg-[#0D0806] p-3.5 rounded-xl border border-[#23150E] flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-lg bg-[#C5A059]/20 border border-[#C5A059]/40 text-[#C5A059] flex items-center justify-center font-bold text-sm">
+              {user?.name?.[0]?.toUpperCase() || "C"}
+            </div>
+            <div className="overflow-hidden">
+              <h4 className="font-semibold text-xs text-[#E8D8C8] truncate">{user?.name || "Customer"}</h4>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-[#C5A059]">
+                {user?.role || "Customer"}
               </span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Welcome, <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">{user?.name || 'User'}</span> 👋
-            </h1>
-            <p className="text-slate-400 text-sm sm:text-base mt-1">
-              File a new complaint or track your submitted complaints below.
-            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={loadDashboardData}
-              className="p-3 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl transition-all"
-              title="Refresh Data"
-            >
-              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-
-            {/* Click to open Complaint Form */}
-            <button 
-              onClick={() => { resetForm(); setShowModal(true); }}
-              className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium text-sm px-5 py-3 rounded-xl shadow-lg shadow-indigo-500/25 transition-all transform active:scale-95"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Create Complaint</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Dashboard Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
-          <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between text-slate-400 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Complaints</span>
-              <Ticket className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div className="text-3xl font-extrabold text-white">{tickets.length}</div>
-          </div>
-
-          <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between text-slate-400 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider">Pending</span>
-              <Clock className="w-5 h-5 text-amber-400" />
-            </div>
-            <div className="text-3xl font-extrabold text-white">
-              {tickets.filter(t => t.status !== 'RESOLVED' && t.status !== 'CLOSED').length}
-            </div>
-          </div>
-
-          <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between text-slate-400 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider">Resolved</span>
-              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div className="text-3xl font-extrabold text-white">
-              {tickets.filter(t => t.status === 'RESOLVED' || t.status === 'CLOSED').length}
-            </div>
-          </div>
-        </div>
-
-        {/* Complaints List on Dashboard */}
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <span>Your Complaints</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-              {tickets.length}
-            </span>
-          </h2>
-
-          {loading ? (
-            <div className="py-20 text-center">
-              <div className="inline-block w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-slate-400 text-sm">Loading complaints...</p>
-            </div>
-          ) : tickets.length === 0 ? (
-            <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-12 text-center max-w-lg mx-auto">
-              <div className="w-14 h-14 bg-slate-800/80 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-400">
-                <MessageSquare className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">No Complaints Found</h3>
-              <p className="text-sm text-slate-400 mb-6">
-                You haven't submitted any complaints yet.
-              </p>
-              <button 
-                onClick={() => { resetForm(); setShowModal(true); }}
-                className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 uppercase tracking-wider underline underline-offset-4"
+          <nav className="space-y-2">
+            {[
+              { id: "home", label: "Dashboard Home", icon: "🏠" },
+              { id: "my-complaints", label: "My Complaints", icon: "📋" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`relative w-full text-left px-4 py-3 rounded-xl font-medium text-xs uppercase tracking-wider transition duration-200 flex items-center space-x-3 ${
+                  activeTab === tab.id ? "text-[#0F0A08] font-bold" : "text-[#9E8573] hover:text-[#E8D8C8]"
+                }`}
               >
-                + Register New Complaint
+                <span className="relative z-20 text-sm">{tab.icon}</span>
+                <span className="relative z-20">{tab.label}</span>
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="activeTabIndicator"
+                    className="absolute inset-0 bg-gradient-to-r from-[#C5A059] to-[#D8B673] rounded-xl z-10 shadow-[0_0_15px_rgba(197,160,89,0.35)]"
+                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                  />
+                )}
               </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tickets.map((t) => (
-                <div 
-                  key={t._id} 
-                  className="bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-6 transition-all duration-200 flex flex-col justify-between hover:shadow-xl hover:shadow-indigo-500/5 group"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <h3 className="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
-                        {t.category}
-                      </h3>
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border uppercase tracking-wider ${getStatusBadge(t.status)}`}>
-                        {t.status || 'OPEN'}
-                      </span>
-                    </div>
+            ))}
+          </nav>
+        </div>
 
-                    <p className="text-slate-400 text-sm leading-relaxed mb-6 line-clamp-3">
-                      {t.description}
-                    </p>
+        <button
+          onClick={handleLogout}
+          className="w-full py-3 bg-red-950/20 border border-red-500/20 text-red-400 rounded-xl font-semibold text-xs uppercase tracking-wider hover:bg-red-900/30 hover:border-red-500/40 transition"
+        >
+          Logout
+        </button>
+      </aside>
+
+      {/* ---------------- MAIN CONTENT AREA ---------------- */}
+      <main className="flex-1 md:ml-64 h-screen overflow-y-auto p-6 sm:p-10 relative">
+        <AnimatePresence>
+          {msg.text && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className={`max-w-md mx-auto mb-6 p-3.5 rounded-xl border text-xs font-semibold text-center shadow-lg ${
+                msg.type === "error"
+                  ? "bg-red-500/10 border-red-500/40 text-red-300"
+                  : "bg-[#C5A059]/10 border-[#C5A059]/40 text-[#E3C896]"
+              }`}
+            >
+              {msg.text}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence mode="wait">
+          {/* TAB 1: HOME */}
+          {activeTab === "home" && (
+            <motion.div
+              key="homeTab"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="space-y-6 max-w-5xl mx-auto"
+            >
+              <div className="relative rounded-2xl p-6 sm:p-10 border border-[#3A261C] bg-gradient-to-br from-[#1A100B] via-[#140D0A] to-[#0A0706] shadow-2xl overflow-hidden">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-[#C5A059]/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10 space-y-3">
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-[#C5A059] px-2.5 py-1 rounded-full bg-[#C5A059]/10 border border-[#C5A059]/20">
+                    Customer Service Center
+                  </span>
+                  <h1 className="text-2xl sm:text-4xl font-extrabold text-[#E8D8C8] tracking-tight">
+                    Welcome Back, <span className="text-[#C5A059]">{user?.name || "Customer"}</span>
+                  </h1>
+                  <p className="text-xs sm:text-sm text-[#9E8573] max-w-xl leading-relaxed">
+                    Easily submit maintenance issues, edit tickets, delete outdated requests, and track status updates.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-[#140D0A] border border-[#2C1C14] rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-xl">
+                <h3 className="text-base sm:text-lg font-bold text-[#E8D8C8]">Facing an issue at your site?</h3>
+                <p className="text-xs text-[#9E8573] max-w-md mx-auto">
+                  Click below to generate a new support request or manage existing tickets.
+                </p>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={handleOpenCreateForm}
+                  className="px-8 py-3.5 bg-gradient-to-r from-[#C5A059] to-[#D8B673] text-[#0F0A08] font-extrabold rounded-xl text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(197,160,89,0.3)] transition"
+                >
+                  Register New Complaint
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB 2: MY COMPLAINTS */}
+          {activeTab === "my-complaints" && (
+            <motion.div
+              key="complaintsTab"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="space-y-5 max-w-5xl mx-auto"
+            >
+              <div className="flex justify-between items-center">
+                <h2 className="text-base sm:text-lg font-bold text-[#E8D8C8]">My Complaints History</h2>
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleOpenCreateForm}
+                  className="px-4 py-2 bg-gradient-to-r from-[#C5A059] to-[#D8B673] text-[#0F0A08] font-bold rounded-lg text-xs uppercase tracking-wider shadow"
+                >
+                  + New Ticket
+                </motion.button>
+              </div>
+
+              {myTickets.length === 0 ? (
+                <div className="p-10 bg-[#140D0A] border border-[#2C1C14] rounded-2xl text-center text-[#9E8573] text-xs">
+                  No active tickets found. Click "+ New Ticket" to create one.
+                </div>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  {myTickets.map((ticket, index) => {
+                    const style = getStatusStyle(ticket.status);
+                    return (
+                      <motion.div
+                        key={ticket._id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        whileHover={{ y: -3 }}
+                        className="bg-[#140D0A] border border-[#2C1C14] p-5 rounded-2xl space-y-4 shadow-lg hover:border-[#C5A059]/30 transition relative flex flex-col justify-between"
+                      >
+                        <div>
+                          {/* Header badges */}
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="text-[10px] uppercase font-extrabold px-2.5 py-0.5 rounded-md bg-[#C5A059]/15 text-[#C5A059] border border-[#C5A059]/20">
+                              {ticket.category}
+                            </span>
+
+                            {/* Status Tag */}
+                            <div className={`flex items-center space-x-2 px-3 py-1 rounded-full border ${style.bg} text-[11px] font-bold capitalize`}>
+                              <span className={`w-2 h-2 rounded-full ${style.sensor}`} />
+                              <span>{ticket.status || "Pending"}</span>
+                            </div>
+                          </div>
+
+                          <h4 className="font-bold text-sm text-[#E8D8C8]">{ticket.title}</h4>
+                          <p className="text-xs text-[#9E8573] leading-relaxed line-clamp-2 mt-1">
+                            {ticket.description}
+                          </p>
+                        </div>
+
+                        {/* Card Bottom Details & Action Buttons */}
+                        <div className="pt-3 border-t border-[#23150E] space-y-3">
+                          <div className="text-[10px] text-[#7A6253] flex justify-between items-center">
+                            <span>Created: {new Date(ticket.createdAt).toLocaleDateString()}</span>
+                            <span>Worker: {ticket.assignedWorker?.name || "Assigned"}</span>
+                          </div>
+
+                          {/* EDIT & DELETE BUTTONS */}
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleOpenEditForm(ticket)}
+                              className="flex-1 py-1.5 bg-[#C5A059]/10 hover:bg-[#C5A059]/20 border border-[#C5A059]/30 text-[#C5A059] rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1"
+                            >
+                              <span>✏️</span>
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTicket(ticket._id)}
+                              className="flex-1 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1"
+                            >
+                              <span>🗑️</span>
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* ---------------- CREATE / EDIT FORM MODAL ---------------- */}
+      <AnimatePresence>
+        {showForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+            <div
+              ref={modalRef}
+              className="bg-[#140D0A] border border-[#3A261C] w-full max-w-md rounded-2xl p-6 relative space-y-5 shadow-[0_0_40px_rgba(0,0,0,0.8)] my-auto"
+            >
+              {/* Modal Header */}
+              <div className="flex justify-between items-center border-b border-[#23150E] pb-3">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#C5A059] shadow-[0_0_8px_#C5A059]" />
+                  <h3 className="text-sm sm:text-base font-bold text-[#E8D8C8]">
+                    {editingTicketId ? "Edit Ticket Details" : "Generate Support Ticket"}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="w-7 h-7 rounded-lg bg-[#0D0806] text-[#9E8573] hover:text-[#E8D8C8] flex items-center justify-center font-bold text-sm transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleFormSubmit} className="space-y-3.5">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={user?.name || ""}
+                    className="w-full bg-[#0D0806] border border-[#23150E] rounded-xl px-3.5 py-2.5 text-xs text-[#9E8573] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
+                    Issue Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Electric Switchboard Issue"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3.5 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
+                    >
+                      <option value="Electrical">Electrical Work</option>
+                      <option value="Plumbing">Plumbing Fix</option>
+                      <option value="Maintenance">General Maintenance</option>
+                      <option value="Cleaning">Cleaning Service</option>
+                    </select>
                   </div>
 
                   <div>
-                    <div className="pt-4 border-t border-slate-800/80 flex flex-col gap-1.5 text-xs text-slate-400 mb-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Worker:</span>
-                        <span className="font-semibold text-slate-300">{t.workerName || t.assignedWorkerName || 'N/A'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Date:</span>
-                        <span>{new Date(t.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => handleEdit(t)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-800/60 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl text-xs font-semibold transition-all"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" /> Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(t._id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-xs font-semibold transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Delete
-                      </button>
-                    </div>
+                    <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
+                      Priority Level
+                    </label>
+                    <select
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                      className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
+                    >
+                      <option value="Normal">Normal</option>
+                      <option value="High">High</option>
+                      <option value="Emergency">🚨 Emergency</option>
+                    </select>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-      </div>
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
+                    Assign Worker
+                  </label>
+                  <select
+                    value={formData.assignedWorker}
+                    onChange={(e) => setFormData({ ...formData, assignedWorker: e.target.value })}
+                    className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3.5 py-2.5 text-xs text-[#E8D8C8] outline-none transition truncate"
+                  >
+                    {workers.map((w) => (
+                      <option key={w._id} value={w._id}>
+                        {w.name} ({w.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-      {/* COMPLAINT FORM MODAL */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
-            
-            {/* Close Button */}
-            <button 
-              onClick={() => setShowModal(false)}
-              className="absolute top-6 right-6 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
+                    Issue Description
+                  </label>
+                  <textarea
+                    rows="3"
+                    required
+                    placeholder="Describe the issue in detail..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3.5 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
+                  />
+                </div>
 
-            <h3 className="text-xl font-bold text-white mb-1">
-              {editingTicket ? 'Edit Complaint Request' : 'File a New Complaint'}
-            </h3>
-            <p className="text-slate-400 text-sm mb-6">
-              Please enter the complaint details below.
-            </p>
-
-            {/* FORM STARTS HERE */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              
-              {/* 1. User Name (Read-Only) */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1">
-                  <User className="w-3.5 h-3.5 text-indigo-400" /> User Name
-                </label>
-                <input 
-                  type="text" 
-                  disabled
-                  value={user?.name || 'Customer'} 
-                  className="w-full bg-slate-950/60 border border-slate-800/80 text-slate-400 rounded-xl px-4 py-3 text-sm cursor-not-allowed focus:outline-none"
-                />
-              </div>
-
-              {/* 2. Complaint Category */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5 text-indigo-400" /> Complaint Category
-                </label>
-                <input 
-                  type="text" 
-                  required 
-                  value={category} 
-                  onChange={(e) => setCategory(e.target.value)} 
-                  placeholder="e.g. Electricity, Maintenance, Network Issue" 
-                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600"
-                />
-              </div>
-
-              {/* 3. Worker Name */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1">
-                  <User className="w-3.5 h-3.5 text-indigo-400" /> Worker Name
-                </label>
-                <input 
-                  type="text" 
-                  required 
-                  value={workerName} 
-                  onChange={(e) => setWorkerName(e.target.value)} 
-                  placeholder="Enter worker or technician name" 
-                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600"
-                />
-              </div>
-
-              {/* 4. Complaint Details / Description */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5 text-indigo-400" /> Complaint Details / Description
-                </label>
-                <textarea 
-                  required 
-                  rows="4" 
-                  value={description} 
-                  onChange={(e) => setDescription(e.target.value)} 
-                  placeholder="Describe your complaint here in detail..." 
-                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600 resize-none"
-                />
-              </div>
-
-              {/* Submit / Cancel Buttons */}
-              <div className="pt-4 flex items-center justify-end gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setShowModal(false)}
-                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
+                <button
                   type="submit"
-                  disabled={submitting}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+                  disabled={loading}
+                  className="w-full py-3 bg-gradient-to-r from-[#C5A059] to-[#D8B673] text-[#0F0A08] font-bold rounded-xl text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(197,160,89,0.3)] hover:opacity-90 transition mt-2"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>{submitting ? 'Submitting...' : editingTicket ? 'Update Complaint' : 'Submit Complaint'}</span>
+                  {loading
+                    ? "Updating..."
+                    : editingTicketId
+                    ? "Update Ticket"
+                    : "Submit Complaint"}
                 </button>
-              </div>
-
-            </form>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
-
+        )}
+      </AnimatePresence>
     </div>
   );
-};
+}
 
 export default CustomerDashboard;

@@ -32,3 +32,19 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+/* Force override Chrome/Edge/Safari default autofill blue background */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #E8D8C8 !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0F0A08 inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: #E8D8C8;
+}
+
+/* Firefox Autofill Override */
+input:autofill {
+  background-color: #0F0A08 !important;
+  color: #E8D8C8 !important;
+}

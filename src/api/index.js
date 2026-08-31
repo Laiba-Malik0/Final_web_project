@@ -1,15 +1,16 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api', // Apne backend ka port check karein (5000 / 8000)
+  baseURL: import.meta.env.VITE_API_URL || 'https://final-web-backend-eta.vercel.app/api',
+  // Note: Agar CRA hai toh `process.env.REACT_APP_API_URL` use karein.
 });
 
-// Request mein JWT token bhejne ke liye
-API.interceptors.request.use((req) => {
-  if (localStorage.getItem('token')) {
-    req.headers.Authorization = `Bearer ${localStorage.getItem('token')}`;
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-  return req;
+  return config;
 });
 
 export default API;
