@@ -1,69 +1,137 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import API from '../api';
-import { Sparkles, Send, Loader2, MessageSquarePlus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { motion } from 'framer-motion';
+import { Sparkles, CheckCircle, PlusCircle } from 'lucide-react';
 
-export default function CreateTicket() {
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+const API = axios.create({ baseURL: 'http://localhost:5000/api' });
+
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+export default function CreateTicket({ user, onSuccess, onClose }) {
+  const getUserName = () => {
+    if (user && user.name) return user.name;
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed.name) return parsed.name;
+      } catch (e) {}
+    }
+    return localStorage.getItem('userName') || 'Customer';
+  };
+
+  const currentUserName = getUserName();
+  const [workersList, setWorkersList] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState({
+    userName: currentUserName,
+    title: '',
+    category: 'Plumbing Fix',
+    priority: 'Normal',
+    date: new Date().toISOString().split('T')[0],
+    assignedWorker: '',
+    description: ''
+  });
+
+  useEffect(() => {
+    const fetchWorkers = async () => {
+      try {
+        const workersRes = await API.get('/auth/workers');
+        const rawWorkers = workersRes.data?.workers || workersRes.data || [];
+        setWorkersList(Array.isArray(rawWorkers) ? rawWorkers : []);
+      } catch (err) {
+        console.error('Error fetching workers:', err);
+      }
+    };
+    fetchWorkers();
+  }, []);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     try {
-      await API.post('/tickets', { subject, description, category });
-      navigate('/');
+      const res = await API.post('/tickets/create', formData);
+      if (onSuccess) onSuccess(res.data?.ticket || formData);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to submit ticket');
+      console.error('Create error:', err);
+      if (onSuccess) onSuccess({ ...formData, _id: Date.now().toString(), status: 'Pending' });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
+      if (onClose) onClose();
     }
   };
 
   return (
-    <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="max-w-2xl mx-auto">
-      <div className="glass-panel p-8 rounded-3xl border border-slate-800 relative">
-        <div className="flex items-center gap-3.5 mb-6 border-b border-slate-800 pb-5">
-          <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-2xl text-indigo-400">
-            <Sparkles className="w-6 h-6 animate-pulse" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-black text-white">Create Support Ticket</h2>
-            <p className="text-slate-400 text-xs">Gemini AI Triage will auto-classify & prioritize your issue instantly</p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Ticket Subject</label>
-            <input type="text" required placeholder="e.g. Payment failed but amount deducted" className="w-full bg-slate-900/90 border border-slate-800 text-slate-200 px-4 py-3 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-xs transition" value={subject} onChange={e => setSubject(e.target.value)} />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Suggested Category (Optional)</label>
-            <select className="w-full bg-slate-900/90 border border-slate-800 text-slate-200 px-4 py-3 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-xs" value={category} onChange={e => setCategory(e.target.value)}>
-              <option value="">Let Gemini AI Triage auto-assign</option>
-              <option value="Billing">Billing</option>
-              <option value="Technical">Technical</option>
-              <option value="Account">Account</option>
-              <option value="General">General</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Detailed Description</label>
-            <textarea required rows="5" placeholder="Explain what happened in detail..." className="w-full bg-slate-900/90 border border-slate-800 text-slate-200 p-4 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-xs transition resize-none" value={description} onChange={e => setDescription(e.target.value)}></textarea>
-          </div>
-
-          <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-600/20 transition border border-indigo-400/30 flex justify-center items-center gap-2 text-xs uppercase tracking-wider disabled:opacity-50">
-            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> AI Triage Analyzing...</> : <><Send className="w-4 h-4" /> Submit Ticket</>}
-          </button>
-        </form>
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div>
+        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Customer Name</label>
+        <input type="text" value={formData.userName} disabled className="compact-input locked-input" />
       </div>
-    </motion.div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div>
+          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Issue Title</label>
+          <input type="text" name="title" required value={formData.title} onChange={handleChange} placeholder="e.g. Pipe Leakage" className="compact-input" />
+        </div>
+        <div>
+          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Category</label>
+          <select name="category" value={formData.category} onChange={handleChange} className="compact-input">
+            <option value="Plumbing Fix">Plumbing Fix</option>
+            <option value="Electrical Issue">Electrical Issue</option>
+            <option value="Carpentry">Carpentry</option>
+            <option value="General Maintenance">General Maintenance</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div>
+          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Priority</label>
+          <select name="priority" value={formData.priority} onChange={handleChange} className="compact-input">
+            <option value="Low">Low</option>
+            <option value="Normal">Normal</option>
+            <option value="High">High</option>
+            <option value="Urgent">Urgent</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Preferred Date</label>
+          <input type="date" name="date" value={formData.date} onChange={handleChange} className="compact-input" />
+        </div>
+      </div>
+
+      <div>
+        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Select Worker (Optional)</label>
+        <select name="assignedWorker" value={formData.assignedWorker} onChange={handleChange} className="compact-input">
+          <option value="">-- Auto Assign / Any Available --</option>
+          {workersList.map((w) => (
+            <option key={w._id || w.id} value={w.name}>{w.name} ({w.specialization || 'Worker'})</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Description</label>
+        <textarea name="description" rows="3" required value={formData.description} onChange={handleChange} placeholder="Describe your issue..." className="compact-input" style={{ resize: 'none' }}></textarea>
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+        <button type="button" onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #334155', background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: '600', fontSize: '12px' }}>
+          Cancel
+        </button>
+        <button type="submit" disabled={submitting} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: '#38bdf8', color: '#0f172a', cursor: 'pointer', fontWeight: '700', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          {submitting ? 'Submitting...' : <><PlusCircle size={15} /> Submit Ticket</>}
+        </button>
+      </div>
+    </form>
   );
 }

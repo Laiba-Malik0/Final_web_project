@@ -1,13 +1,15 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import API from '../api';
 import { AuthContext } from '../context/AuthContext';
 import io from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { Bot, Send, CheckCircle, Sparkles, User, Shield, Lock } from 'lucide-react';
+import { Bot, Send, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const socket = io('https://final-web-backend-eta.vercel.app/api');
+// Dynamic Socket URL with Fallback
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const socket = io(SOCKET_URL);
 
 export default function TicketDetail() {
   const { id } = useParams();
@@ -21,7 +23,7 @@ export default function TicketDetail() {
   const [status, setStatus] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
 
-  const loadTicket = () => {
+  const loadTicket = useCallback(() => {
     API.get(`/tickets/${id}`).then(({ data }) => {
       setTicket(data.ticket);
       setMessages(data.messages);
@@ -29,8 +31,10 @@ export default function TicketDetail() {
       setPriority(data.ticket.priority);
       setStatus(data.ticket.status);
       setResolutionNote(data.ticket.resolutionNote || '');
+    }).catch(err => {
+      console.error('Error loading ticket:', err);
     });
-  };
+  }, [id]);
 
   useEffect(() => {
     loadTicket();
@@ -49,7 +53,7 @@ export default function TicketDetail() {
       socket.off('receive_message');
       socket.off('ticket_updated');
     };
-  }, [id]);
+  }, [id, loadTicket]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();

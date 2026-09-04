@@ -1,555 +1,468 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import gsap from "gsap";
-import API from "../api/index";
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
+import gsap from 'gsap';
+import { 
+  LayoutDashboard, FileText, LogOut, Menu, X, PlusCircle, Search, Edit2, 
+  Trash2, Sparkles, Calendar, HardHat, CheckCircle, 
+  XCircle, Clock, ChevronRight
+} from 'lucide-react';
 
-function CustomerDashboard() {
-  const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("home");
-  const [workers, setWorkers] = useState([]);
-  const [myTickets, setMyTickets] = useState([]);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+// CreateTicket Component Import
+import CreateTicket from './CreateTicket';
 
-  // Form State (Create & Edit)
-  const [showForm, setShowForm] = useState(false);
-  const [editingTicketId, setEditingTicketId] = useState(null); // Track if Editing
-  const [formData, setFormData] = useState({
-    title: "",
-    category: "Electrical",
-    priority: "Normal",
-    description: "",
-    assignedWorker: "",
-  });
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState({ type: "", text: "" });
+// API Base URL (Dynamic Environment Variable with Fallback)
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API = axios.create({ baseURL: API_BASE_URL });
 
-  const modalRef = useRef(null);
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-  useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem("user"));
-    if (!userData) {
-      navigate("/");
-    } else {
-      setUser(userData);
-      fetchWorkers();
-      fetchMyTickets();
-    }
-  }, []);
+const cardVariant = {
+  hidden: { opacity: 0, y: 15 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } },
+  exit: { opacity: 0, y: -10, transition: { duration: 0.2 } }
+};
 
-  // GSAP Modal Animation
-  useEffect(() => {
-    if (showForm && modalRef.current) {
-      gsap.fromTo(
-        modalRef.current,
-        { scale: 0.85, opacity: 0, y: 30 },
-        { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.4)" }
-      );
-    }
-  }, [showForm]);
-
-  // Toast Auto Hide
-  useEffect(() => {
-    if (msg.text) {
-      const timer = setTimeout(() => setMsg({ type: "", text: "" }), 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [msg]);
-
-  const fetchWorkers = async () => {
-    try {
-      const res = await API.get("/auth/workers");
-      setWorkers(res.data || []);
-      if (res.data?.length > 0 && !editingTicketId) {
-        setFormData((prev) => ({ ...prev, assignedWorker: res.data[0]._id }));
+export default function CustomerDashboard({ user }) {
+  const getUserName = () => {
+    if (user && user.name) return user.name;
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed.name) return parsed.name;
+      } catch (e) {
+        // Fallback catch
       }
+    }
+    return localStorage.getItem('userName') || 'Customer';
+  };
+
+  const currentUserName = getUserName();
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('complaints');
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTicketId, setEditingTicketId] = useState(null);
+
+  const cardsContainerRef = useRef(null);
+
+  const [formData, setFormData] = useState(() => ({
+    userName: currentUserName,
+    title: '',
+    category: 'Plumbing Fix',
+    priority: 'Normal',
+    date: new Date().toISOString().split('T')[0],
+    assignedWorker: '',
+    description: ''
+  }));
+
+  // Main Fetch function
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    else setIsSyncing(true);
+
+    try {
+      const ticketsRes = await API.get('/tickets/customer-tickets').catch(() => ({ data: [] }));
+      const rawTickets = ticketsRes.data?.tickets || ticketsRes.data || [];
+      setTickets(Array.isArray(rawTickets) ? rawTickets : []);
     } catch (err) {
-      console.error("Error fetching workers:", err);
+      console.error('API Fetch Error:', err);
+    } finally {
+      if (!isBackground) setLoading(false);
+      else setIsSyncing(false);
     }
   };
 
-  const fetchMyTickets = async () => {
-    try {
-      const res = await API.get("/tickets/customer-tickets");
-      setMyTickets(res.data || []);
-    } catch (err) {
-      console.error("Error fetching tickets:", err);
+  // Auto-Sync Polling
+  useEffect(() => {
+    fetchData(false);
+
+    const intervalId = setInterval(() => {
+      fetchData(true);
+    }, 5000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'complaints' && cardsContainerRef.current && tickets.length > 0 && !loading && !isSyncing) {
+      gsap.fromTo(
+        cardsContainerRef.current.children,
+        { opacity: 0, y: 15 },
+        { opacity: 1, y: 0, duration: 0.35, stagger: 0.06, ease: 'power2.out', clearProps: 'transform' }
+      );
     }
+  }, [activeTab, loading, isSyncing, tickets.length]);
+
+  const resetForm = () => setFormData({
+    userName: currentUserName,
+    title: '',
+    category: 'Plumbing Fix',
+    priority: 'Normal',
+    date: new Date().toISOString().split('T')[0],
+    assignedWorker: '',
+    description: ''
+  });
+
+  const closeModal = () => {
+    setIsCreateModalOpen(false);
+    setIsEditModalOpen(false);
+    setEditingTicketId(null);
+    resetForm();
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/");
+    localStorage.clear();
+    window.location.href = '/login';
   };
 
-  // Open Form for Creating New Ticket
-  const handleOpenCreateForm = () => {
-    setEditingTicketId(null);
-    setFormData({
-      title: "",
-      category: "Electrical",
-      priority: "Normal",
-      description: "",
-      assignedWorker: workers[0]?._id || "",
-    });
-    setShowForm(true);
+  const handleTicketCreated = (newTicket) => {
+    if (newTicket) {
+      setTickets([newTicket, ...tickets]);
+    } else {
+      fetchData(false);
+    }
+    closeModal();
   };
 
-  // Open Form for Editing Existing Ticket
-  const handleOpenEditForm = (ticket) => {
+  const handleOpenEdit = (ticket) => {
     setEditingTicketId(ticket._id);
     setFormData({
-      title: ticket.title || "",
-      category: ticket.category || "Electrical",
-      priority: ticket.priority || "Normal",
-      description: ticket.description || "",
-      assignedWorker: ticket.assignedWorker?._id || ticket.assignedWorker || "",
+      userName: currentUserName,
+      title: ticket.title || '',
+      category: ticket.category || 'Plumbing Fix',
+      priority: ticket.priority || 'Normal',
+      date: ticket.date ? ticket.date.split('T')[0] : (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+      assignedWorker: ticket.assignedWorker || '',
+      description: ticket.description || ''
     });
-    setShowForm(true);
+    setIsEditModalOpen(true);
   };
 
-  // Delete Ticket Handler
-  const handleDeleteTicket = async (ticketId) => {
-    if (!window.confirm("Are you sure you want to delete this ticket?")) return;
-
-    try {
-      await API.delete(`/tickets/${ticketId}`);
-      setMsg({ type: "success", text: "Ticket deleted successfully!" });
-      setMyTickets((prev) => prev.filter((t) => t._id !== ticketId));
-    } catch (err) {
-      setMsg({
-        type: "error",
-        text: err.response?.data?.message || "Failed to delete ticket",
-      });
-    }
-  };
-
-  // Submit Form (Handles Create & Update)
-  const handleFormSubmit = async (e) => {
+  const handleUpdateTicket = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setMsg({ type: "", text: "" });
-
     try {
-      if (editingTicketId) {
-        // UPDATE TICKET
-        const res = await API.put(`/tickets/${editingTicketId}`, formData);
-        if (res.status === 200) {
-          setMsg({ type: "success", text: "Ticket updated successfully!" });
-        }
-      } else {
-        // CREATE TICKET
-        const res = await API.post("/tickets/create", formData);
-        if (res.status === 201 || res.status === 200) {
-          setMsg({ type: "success", text: "Ticket submitted successfully!" });
-        }
-      }
-      setShowForm(false);
-      fetchMyTickets();
+      const res = await API.put(`/tickets/update/${editingTicketId}`, formData);
+      setTickets(tickets.map(t => t._id === editingTicketId ? (res.data.ticket || { ...t, ...formData }) : t));
     } catch (err) {
-      setMsg({
-        type: "error",
-        text: err.response?.data?.message || "Operation failed",
-      });
+      setTickets(tickets.map(t => t._id === editingTicketId ? { ...t, ...formData } : t));
     } finally {
-      setLoading(false);
+      closeModal();
     }
   };
 
-  const getStatusStyle = (status) => {
-    switch (status?.toLowerCase()) {
-      case "completed":
-        return {
-          bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
-          sensor: "bg-emerald-500 shadow-[0_0_8px_#10B981]",
-        };
-      case "in progress":
-      case "accepted":
-        return {
-          bg: "bg-sky-500/10 border-sky-500/30 text-sky-400",
-          sensor: "bg-sky-500 shadow-[0_0_8px_#0EA5E9]",
-        };
-      case "rejected":
-        return {
-          bg: "bg-rose-500/10 border-rose-500/30 text-rose-400",
-          sensor: "bg-rose-500 shadow-[0_0_8px_#F43F5E]",
-        };
-      default:
-        return {
-          bg: "bg-amber-500/10 border-amber-500/30 text-amber-400",
-          sensor: "bg-amber-500 shadow-[0_0_8px_#F59E0B] animate-pulse",
-        };
+  const handleDeleteTicket = async (id) => {
+    if (!window.confirm('Delete this complaint permanently?')) return;
+    try {
+      await API.delete(`/tickets/delete/${id}`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTickets(tickets.filter(t => t._id !== id));
     }
+  };
+
+  const formatDate = (rawDate, rawCreatedAt) => {
+    const val = rawDate || rawCreatedAt;
+    if (!val) return 'N/A';
+    const parsed = new Date(val);
+    return isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const renderStatusBadge = (status = 'Pending') => {
+    const s = String(status).toLowerCase().trim();
+    
+    const isApproved = ['approved', 'in progress', 'resolved'].includes(s);
+    const isRejected = ['rejected', 'reject', 'closed'].includes(s);
+
+    const config = isApproved
+      ? { bg: 'rgba(34, 197, 94, 0.12)', color: '#4ade80', border: 'rgba(34, 197, 94, 0.3)', icon: CheckCircle, label: status }
+      : isRejected
+        ? { bg: 'rgba(239, 68, 68, 0.12)', color: '#f87171', border: 'rgba(239, 68, 68, 0.3)', icon: XCircle, label: status }
+        : { bg: 'rgba(234, 179, 8, 0.12)', color: '#facc15', border: 'rgba(234, 179, 8, 0.3)', icon: Clock, label: 'Pending' };
+
+    const Icon = config.icon;
+
+    return (
+      <span style={{ backgroundColor: config.bg, color: config.color, border: `1px solid ${config.border}`, padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px', backdropFilter: 'blur(4px)' }}>
+        <Icon size={13} /> {config.label}
+      </span>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0706] text-[#E8D8C8] flex font-sans overflow-hidden">
-      {/* Mobile Toggle Button */}
-      <div className="md:hidden fixed top-4 right-4 z-50">
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2.5 bg-[#140D0A] border border-[#2C1C14] text-[#C5A059] rounded-xl text-xl shadow-lg"
-        >
-          {isMobileMenuOpen ? "✕" : "☰"}
-        </button>
-      </div>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0b1120', color: '#f8fafc', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        .heading-font { font-family: 'Outfit', sans-serif; }
+        
+        .compact-input { width: 100%; padding: 10px 14px; border-radius: 10px; background-color: #0b1120; border: 1px solid #334155; color: #fff; font-size: 13px; outline: none; transition: all 0.2s ease; }
+        .compact-input:focus { border-color: #38bdf8; box-shadow: 0 0 10px rgba(56, 189, 248, 0.2); }
+        
+        .complaint-card { 
+          background: linear-gradient(145deg, #1e293b 0%, #151f30 100%); 
+          border: 1px solid #334155; 
+          border-radius: 16px; 
+          padding: 22px 24px; 
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .complaint-card:hover {
+          transform: translateY(-2px);
+          border-color: #475569;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 0 15px rgba(56, 189, 248, 0.05);
+        }
+        
+        @media (max-width: 850px) { 
+          .desktop-sidebar { display: none !important; } 
+          .mobile-topbar { display: flex !important; } 
+          .main-content { padding: 75px 16px 28px 16px !important; }
+        }
+        @media (min-width: 851px) { 
+          .desktop-sidebar { display: flex !important; } 
+          .mobile-topbar { display: none !important; } 
+          .mobile-drawer { display: none !important; }
+          .main-content { padding: 36px 40px !important; }
+        }
+      `}</style>
 
-      {/* ---------------- LEFT SIDEBAR ---------------- */}
-      <aside
-        className={`fixed top-0 left-0 h-screen w-64 bg-[#140D0A] border-r border-[#2C1C14] p-6 flex flex-col justify-between z-40 transition-transform duration-300 md:translate-x-0 ${
-          isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0"
-        }`}
-      >
-        <div className="space-y-8">
-          <div className="flex items-center space-x-3 px-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#C5A059] to-[#E3C896] text-[#0F0A08] flex items-center justify-center font-black text-lg shadow-[0_0_15px_rgba(197,160,89,0.3)]">
-              S
-            </div>
+      {/* Desktop Sidebar */}
+      <aside className="desktop-sidebar" style={{ width: '270px', backgroundColor: '#0f172a', borderRight: '1px solid #1e293b', flexDirection: 'column', justifyContent: 'space-between', padding: '28px 20px', position: 'sticky', top: 0, height: '100vh' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
+            <div style={{ backgroundColor: '#ffffff', padding: '9px', borderRadius: '12px', boxShadow: '0 0 15px rgba(255,255,255,0.2)' }}><Search size={20} color="#0f172a" /></div>
             <div>
-              <h2 className="font-extrabold text-base tracking-wider text-[#E8D8C8]">SUPPORT</h2>
-              <p className="text-[10px] text-[#C5A059] tracking-widest font-bold">PORTAL</p>
+              <h2 className="heading-font" style={{ fontSize: '18px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '0.5px' }}>SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span></h2>
+              <span style={{ fontSize: '10px', color: '#38bdf8', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '1px' }}>Customer Portal</span>
             </div>
           </div>
 
-          <div className="bg-[#0D0806] p-3.5 rounded-xl border border-[#23150E] flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-[#C5A059]/20 border border-[#C5A059]/40 text-[#C5A059] flex items-center justify-center font-bold text-sm">
-              {user?.name?.[0]?.toUpperCase() || "C"}
+          <div style={{ backgroundColor: '#1e293b', padding: '12px 14px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', border: '1px solid #334155' }}>
+            <div style={{ backgroundColor: '#ffffff', width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', color: '#0f172a', fontSize: '15px' }}>
+              {currentUserName ? currentUserName[0].toUpperCase() : 'U'}
             </div>
-            <div className="overflow-hidden">
-              <h4 className="font-semibold text-xs text-[#E8D8C8] truncate">{user?.name || "Customer"}</h4>
-              <span className="text-[9px] uppercase font-bold tracking-wider text-[#C5A059]">
-                {user?.role || "Customer"}
+            <div style={{ overflow: 'hidden' }}>
+              <p style={{ margin: 0, fontWeight: '700', fontSize: '13px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{currentUserName}</p>
+              <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#38bdf8', display: 'inline-block' }}></span> Active User
               </span>
             </div>
           </div>
 
-          <nav className="space-y-2">
-            {[
-              { id: "home", label: "Dashboard Home", icon: "🏠" },
-              { id: "my-complaints", label: "My Complaints", icon: "📋" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`relative w-full text-left px-4 py-3 rounded-xl font-medium text-xs uppercase tracking-wider transition duration-200 flex items-center space-x-3 ${
-                  activeTab === tab.id ? "text-[#0F0A08] font-bold" : "text-[#9E8573] hover:text-[#E8D8C8]"
-                }`}
-              >
-                <span className="relative z-20 text-sm">{tab.icon}</span>
-                <span className="relative z-20">{tab.label}</span>
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="activeTabIndicator"
-                    className="absolute inset-0 bg-gradient-to-r from-[#C5A059] to-[#D8B673] rounded-xl z-10 shadow-[0_0_15px_rgba(197,160,89,0.35)]"
-                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                  />
-                )}
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {[{ id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }].map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderRadius: '10px', border: 'none', backgroundColor: activeTab === tab.id ? '#ffffff' : 'transparent', color: activeTab === tab.id ? '#0f172a' : '#94a3b8', fontWeight: '700', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s', boxShadow: activeTab === tab.id ? '0 4px 12px rgba(255, 255, 255, 0.15)' : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><tab.icon size={16} /> {tab.label}</div>
+                {activeTab === tab.id && <ChevronRight size={15} />}
               </button>
             ))}
           </nav>
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="w-full py-3 bg-red-950/20 border border-red-500/20 text-red-400 rounded-xl font-semibold text-xs uppercase tracking-wider hover:bg-red-900/30 hover:border-red-500/40 transition"
-        >
-          Logout
-        </button>
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '10px', border: 'none', backgroundColor: '#ef4444', color: '#ffffff', cursor: 'pointer', fontWeight: '700', fontSize: '12px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+          <LogOut size={15} /> Log Out
+        </motion.button>
       </aside>
 
-      {/* ---------------- MAIN CONTENT AREA ---------------- */}
-      <main className="flex-1 md:ml-64 h-screen overflow-y-auto p-6 sm:p-10 relative">
-        <AnimatePresence>
-          {msg.text && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className={`max-w-md mx-auto mb-6 p-3.5 rounded-xl border text-xs font-semibold text-center shadow-lg ${
-                msg.type === "error"
-                  ? "bg-red-500/10 border-red-500/40 text-red-300"
-                  : "bg-[#C5A059]/10 border-[#C5A059]/40 text-[#E3C896]"
-              }`}
-            >
-              {msg.text}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence mode="wait">
-          {/* TAB 1: HOME */}
-          {activeTab === "home" && (
-            <motion.div
-              key="homeTab"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              className="space-y-6 max-w-5xl mx-auto"
-            >
-              <div className="relative rounded-2xl p-6 sm:p-10 border border-[#3A261C] bg-gradient-to-br from-[#1A100B] via-[#140D0A] to-[#0A0706] shadow-2xl overflow-hidden">
-                <div className="absolute top-0 right-0 w-80 h-80 bg-[#C5A059]/10 rounded-full blur-3xl pointer-events-none" />
-                <div className="relative z-10 space-y-3">
-                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-[#C5A059] px-2.5 py-1 rounded-full bg-[#C5A059]/10 border border-[#C5A059]/20">
-                    Customer Service Center
-                  </span>
-                  <h1 className="text-2xl sm:text-4xl font-extrabold text-[#E8D8C8] tracking-tight">
-                    Welcome Back, <span className="text-[#C5A059]">{user?.name || "Customer"}</span>
-                  </h1>
-                  <p className="text-xs sm:text-sm text-[#9E8573] max-w-xl leading-relaxed">
-                    Easily submit maintenance issues, edit tickets, delete outdated requests, and track status updates.
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-[#140D0A] border border-[#2C1C14] rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-xl">
-                <h3 className="text-base sm:text-lg font-bold text-[#E8D8C8]">Facing an issue at your site?</h3>
-                <p className="text-xs text-[#9E8573] max-w-md mx-auto">
-                  Click below to generate a new support request or manage existing tickets.
-                </p>
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={handleOpenCreateForm}
-                  className="px-8 py-3.5 bg-gradient-to-r from-[#C5A059] to-[#D8B673] text-[#0F0A08] font-extrabold rounded-xl text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(197,160,89,0.3)] transition"
-                >
-                  Register New Complaint
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* TAB 2: MY COMPLAINTS */}
-          {activeTab === "my-complaints" && (
-            <motion.div
-              key="complaintsTab"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              className="space-y-5 max-w-5xl mx-auto"
-            >
-              <div className="flex justify-between items-center">
-                <h2 className="text-base sm:text-lg font-bold text-[#E8D8C8]">My Complaints History</h2>
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleOpenCreateForm}
-                  className="px-4 py-2 bg-gradient-to-r from-[#C5A059] to-[#D8B673] text-[#0F0A08] font-bold rounded-lg text-xs uppercase tracking-wider shadow"
-                >
-                  + New Ticket
-                </motion.button>
-              </div>
-
-              {myTickets.length === 0 ? (
-                <div className="p-10 bg-[#140D0A] border border-[#2C1C14] rounded-2xl text-center text-[#9E8573] text-xs">
-                  No active tickets found. Click "+ New Ticket" to create one.
-                </div>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                  {myTickets.map((ticket, index) => {
-                    const style = getStatusStyle(ticket.status);
-                    return (
-                      <motion.div
-                        key={ticket._id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        whileHover={{ y: -3 }}
-                        className="bg-[#140D0A] border border-[#2C1C14] p-5 rounded-2xl space-y-4 shadow-lg hover:border-[#C5A059]/30 transition relative flex flex-col justify-between"
-                      >
-                        <div>
-                          {/* Header badges */}
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="text-[10px] uppercase font-extrabold px-2.5 py-0.5 rounded-md bg-[#C5A059]/15 text-[#C5A059] border border-[#C5A059]/20">
-                              {ticket.category}
-                            </span>
-
-                            {/* Status Tag */}
-                            <div className={`flex items-center space-x-2 px-3 py-1 rounded-full border ${style.bg} text-[11px] font-bold capitalize`}>
-                              <span className={`w-2 h-2 rounded-full ${style.sensor}`} />
-                              <span>{ticket.status || "Pending"}</span>
-                            </div>
-                          </div>
-
-                          <h4 className="font-bold text-sm text-[#E8D8C8]">{ticket.title}</h4>
-                          <p className="text-xs text-[#9E8573] leading-relaxed line-clamp-2 mt-1">
-                            {ticket.description}
-                          </p>
-                        </div>
-
-                        {/* Card Bottom Details & Action Buttons */}
-                        <div className="pt-3 border-t border-[#23150E] space-y-3">
-                          <div className="text-[10px] text-[#7A6253] flex justify-between items-center">
-                            <span>Created: {new Date(ticket.createdAt).toLocaleDateString()}</span>
-                            <span>Worker: {ticket.assignedWorker?.name || "Assigned"}</span>
-                          </div>
-
-                          {/* EDIT & DELETE BUTTONS */}
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleOpenEditForm(ticket)}
-                              className="flex-1 py-1.5 bg-[#C5A059]/10 hover:bg-[#C5A059]/20 border border-[#C5A059]/30 text-[#C5A059] rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1"
-                            >
-                              <span>✏️</span>
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTicket(ticket._id)}
-                              className="flex-1 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1"
-                            >
-                              <span>🗑️</span>
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      {/* ---------------- CREATE / EDIT FORM MODAL ---------------- */}
+      {/* Mobile Drawer */}
       <AnimatePresence>
-        {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-            <div
-              ref={modalRef}
-              className="bg-[#140D0A] border border-[#3A261C] w-full max-w-md rounded-2xl p-6 relative space-y-5 shadow-[0_0_40px_rgba(0,0,0,0.8)] my-auto"
-            >
-              {/* Modal Header */}
-              <div className="flex justify-between items-center border-b border-[#23150E] pb-3">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#C5A059] shadow-[0_0_8px_#C5A059]" />
-                  <h3 className="text-sm sm:text-base font-bold text-[#E8D8C8]">
-                    {editingTicketId ? "Edit Ticket Details" : "Generate Support Ticket"}
-                  </h3>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 998 }} />
+            <motion.aside initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 220 }} className="mobile-drawer" style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '270px', zIndex: 999, backgroundColor: '#0f172a', padding: '24px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderRight: '1px solid #1e293b' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                  <h2 className="heading-font" style={{ fontSize: '17px', fontWeight: '800', color: '#fff', margin: 0 }}>SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span></h2>
+                  <button onClick={() => setIsMobileMenuOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
                 </div>
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="w-7 h-7 rounded-lg bg-[#0D0806] text-[#9E8573] hover:text-[#E8D8C8] flex items-center justify-center font-bold text-sm transition"
-                >
-                  ✕
-                </button>
+
+                <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[{ id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }].map((tab) => (
+                    <button key={tab.id} onClick={() => { setActiveTab(tab.id); setIsMobileMenuOpen(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderRadius: '10px', border: 'none', backgroundColor: activeTab === tab.id ? '#ffffff' : 'transparent', color: activeTab === tab.id ? '#0f172a' : '#94a3b8', fontWeight: '700', cursor: 'pointer', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><tab.icon size={16} /> {tab.label}</div>
+                    </button>
+                  ))}
+                </nav>
               </div>
 
-              {/* Form Body */}
-              <form onSubmit={handleFormSubmit} className="space-y-3.5">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
-                    Customer Name
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={user?.name || ""}
-                    className="w-full bg-[#0D0806] border border-[#23150E] rounded-xl px-3.5 py-2.5 text-xs text-[#9E8573] outline-none"
-                  />
+              <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '10px', border: 'none', backgroundColor: '#ef4444', color: '#ffffff', cursor: 'pointer', fontWeight: '700', fontSize: '12px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+                <LogOut size={15} /> Log Out
+              </button>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main Workspace */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* Fixed Mobile Topbar */}
+        <header className="mobile-topbar" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '56px', padding: '0 16px', backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b', alignItems: 'center', justifyContent: 'space-between', zIndex: 90 }}>
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} style={{ background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '6px', borderRadius: '8px', cursor: 'pointer' }}>
+            {isMobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+          <span className="heading-font" style={{ fontWeight: '800', color: '#fff', fontSize: '15px' }}>SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span></span>
+          <div style={{ width: 30 }}></div>
+        </header>
+
+        <main className="main-content" style={{ flex: 1, overflowY: 'auto', maxWidth: '1100px', margin: '0 auto', width: '100%' }}>
+          <AnimatePresence mode="wait">
+            {activeTab === 'dashboard' ? (
+              <motion.div key="tab-dash" variants={cardVariant} initial="hidden" animate="visible" exit="exit" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid #334155', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.5)' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', marginBottom: '14px' }}>
+                    <Sparkles size={13} /> SUPPORT SPHERE SYSTEM
+                  </div>
+                  <h1 className="heading-font" style={{ fontSize: '28px', margin: '0 0 8px 0', color: '#ffffff', fontWeight: '800' }}>
+                    Welcome back, <span style={{ color: '#38bdf8' }}>{currentUserName}</span>
+                  </h1>
+                  <p style={{ color: '#94a3b8', margin: 0, fontSize: '13px', lineHeight: '1.5' }}>Lodge tickets and track live updates directly from workers.</p>
                 </div>
 
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
-                    Issue Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Electric Switchboard Issue"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3.5 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
-                  />
-                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                  <button onClick={() => setIsCreateModalOpen(true)} style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', border: 'none', borderRadius: '16px', padding: '20px', color: '#fff', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 8px 20px rgba(2, 132, 199, 0.3)' }}>
+                    <PlusCircle size={28} style={{ marginBottom: '12px' }} />
+                    <h3 className="heading-font" style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '700' }}>File New Complaint</h3>
+                    <p style={{ margin: 0, fontSize: '12px', opacity: 0.8 }}>Request maintenance or fix</p>
+                  </button>
 
-                <div className="grid grid-cols-2 gap-3">
+                  <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Total Complaints</span>
+                    <h2 className="heading-font" style={{ fontSize: '28px', margin: '4px 0 0 0', color: '#fff' }}>{tickets.length}</h2>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div key="tab-complaints" variants={cardVariant} initial="hidden" animate="visible" exit="exit" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
-                      Category
-                    </label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
-                    >
-                      <option value="Electrical">Electrical Work</option>
-                      <option value="Plumbing">Plumbing Fix</option>
-                      <option value="Maintenance">General Maintenance</option>
-                      <option value="Cleaning">Cleaning Service</option>
+                    <h1 className="heading-font" style={{ fontSize: '24px', margin: 0, fontWeight: '800' }}>My Complaints</h1>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>View and track all your support requests</p>
+                  </div>
+                  <button onClick={() => setIsCreateModalOpen(true)} style={{ backgroundColor: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: '10px', padding: '10px 18px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <PlusCircle size={16} /> New Complaint
+                  </button>
+                </div>
+
+                {loading ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Loading tickets...</div>
+                ) : tickets.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#1e293b', borderRadius: '16px', border: '1px solid #334155' }}>
+                    <p style={{ margin: 0, color: '#94a3b8' }}>No complaints found. Click "New Complaint" to get started.</p>
+                  </div>
+                ) : (
+                  <div ref={cardsContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {tickets.map((ticket) => (
+                      <div key={ticket._id || Math.random()} className="complaint-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '10px' }}>
+                          <div>
+                            <h3 className="heading-font" style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#fff' }}>{ticket.title}</h3>
+                            <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: '600' }}>{ticket.category}</span>
+                          </div>
+                          {renderStatusBadge(ticket.status)}
+                        </div>
+
+                        <p style={{ fontSize: '13px', color: '#cbd5e1', margin: '0 0 16px 0', lineHeight: '1.5' }}>{ticket.description}</p>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', paddingTop: '12px', borderTop: '1px solid #334155', fontSize: '12px', color: '#94a3b8' }}>
+                          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={14} /> {formatDate(ticket.date, ticket.createdAt)}</span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><HardHat size={14} /> Worker: {ticket.assignedWorker || 'Unassigned'}</span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => handleOpenEdit(ticket)} style={{ background: 'none', border: '1px solid #334155', color: '#38bdf8', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Edit2 size={13} /> Edit
+                            </button>
+                            <button onClick={() => handleDeleteTicket(ticket._id)} style={{ background: 'none', border: '1px solid #334155', color: '#ef4444', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Trash2 size={13} /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
+
+      {/* CREATE TICKET MODAL */}
+      <AnimatePresence>
+        {isCreateModalOpen && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} style={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '18px', width: '100%', maxWidth: '500px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                <h2 className="heading-font" style={{ margin: 0, fontSize: '18px', color: '#fff' }}>File New Complaint</h2>
+                <button onClick={closeModal} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={18} /></button>
+              </div>
+
+              <CreateTicket user={user} onSuccess={handleTicketCreated} onClose={closeModal} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* EDIT TICKET MODAL */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} style={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '18px', width: '100%', maxWidth: '500px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                <h2 className="heading-font" style={{ margin: 0, fontSize: '18px', color: '#fff' }}>Edit Complaint</h2>
+                <button onClick={closeModal} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={18} /></button>
+              </div>
+
+              <form onSubmit={handleUpdateTicket} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Issue Title</label>
+                  <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required className="compact-input" />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Category</label>
+                    <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="compact-input">
+                      <option value="Plumbing Fix">Plumbing Fix</option>
+                      <option value="Electrical Issue">Electrical Issue</option>
+                      <option value="Carpentry">Carpentry</option>
+                      <option value="General Maintenance">General Maintenance</option>
                     </select>
                   </div>
-
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
-                      Priority Level
-                    </label>
-                    <select
-                      value={formData.priority}
-                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                      className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
-                    >
+                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Priority</label>
+                    <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} className="compact-input">
+                      <option value="Low">Low</option>
                       <option value="Normal">Normal</option>
                       <option value="High">High</option>
-                      <option value="Emergency">🚨 Emergency</option>
+                      <option value="Urgent">Urgent</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
-                    Assign Worker
-                  </label>
-                  <select
-                    value={formData.assignedWorker}
-                    onChange={(e) => setFormData({ ...formData, assignedWorker: e.target.value })}
-                    className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3.5 py-2.5 text-xs text-[#E8D8C8] outline-none transition truncate"
-                  >
-                    {workers.map((w) => (
-                      <option key={w._id} value={w._id}>
-                        {w.name} ({w.email})
-                      </option>
-                    ))}
-                  </select>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Description</label>
+                  <textarea rows="3" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required className="compact-input" style={{ resize: 'none' }}></textarea>
                 </div>
 
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-[#9E8573] tracking-wider block mb-1">
-                    Issue Description
-                  </label>
-                  <textarea
-                    rows="3"
-                    required
-                    placeholder="Describe the issue in detail..."
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full bg-[#0D0806] border border-[#23150E] focus:border-[#C5A059] rounded-xl px-3.5 py-2.5 text-xs text-[#E8D8C8] outline-none transition"
-                  />
+                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  <button type="button" onClick={closeModal} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #334155', background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: '600', fontSize: '12px' }}>Cancel</button>
+                  <button type="submit" style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: '#38bdf8', color: '#0f172a', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}>Save Changes</button>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 bg-gradient-to-r from-[#C5A059] to-[#D8B673] text-[#0F0A08] font-bold rounded-xl text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(197,160,89,0.3)] hover:opacity-90 transition mt-2"
-                >
-                  {loading
-                    ? "Updating..."
-                    : editingTicketId
-                    ? "Update Ticket"
-                    : "Submit Complaint"}
-                </button>
               </form>
-            </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
     </div>
   );
 }
-
-export default CustomerDashboard;
