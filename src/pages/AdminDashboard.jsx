@@ -8,7 +8,9 @@ import {
   ClipboardList, Wrench, Search, Cpu, Database, UserPlus
 } from 'lucide-react';
 
-const API = axios.create({ baseURL: 'http://localhost:5000/api' });
+const API = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'https://final-web-backend-eta.vercel.app/api',
+});
 
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -31,7 +33,7 @@ export default function AdminDashboard({ user }) {
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
   const [tickets, setTickets] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -487,7 +489,6 @@ export default function AdminDashboard({ user }) {
                             </motion.button>
                           </div>
                         </div>
-
                       </div>
                     ))}
                   </div>
