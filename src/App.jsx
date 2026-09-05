@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AuthProvider, AuthContext } from './context/AuthContext';
+import AuthProvider, { AuthContext } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import CustomerDashboard from './pages/CustomerDashboard';
