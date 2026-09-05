@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
@@ -8,10 +8,8 @@ import {
   XCircle, Clock, ChevronRight
 } from 'lucide-react';
 
-// CreateTicket Component Import
 import CreateTicket from './CreateTicket';
 
-// API Base URL (Dynamic Environment Variable with Fallback)
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://final-web-backend-eta.vercel.app/api';
 const API = axios.create({ baseURL: API_BASE_URL });
 
@@ -35,6 +33,7 @@ export default function CustomerDashboard({ user }) {
       try {
         const parsed = JSON.parse(storedUser);
         if (parsed.name) return parsed.name;
+      // eslint-disable-next-line no-unused-vars
       } catch (e) {
         // Fallback catch
       }
@@ -65,7 +64,6 @@ export default function CustomerDashboard({ user }) {
     description: ''
   }));
 
-  // Main Fetch function
   const fetchData = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     else setIsSyncing(true);
@@ -82,7 +80,6 @@ export default function CustomerDashboard({ user }) {
     }
   };
 
-  // Auto-Sync Polling
   useEffect(() => {
     fetchData(false);
 
@@ -185,89 +182,74 @@ export default function CustomerDashboard({ user }) {
     const isRejected = ['rejected', 'reject', 'closed'].includes(s);
 
     const config = isApproved
-      ? { bg: 'rgba(34, 197, 94, 0.12)', color: '#4ade80', border: 'rgba(34, 197, 94, 0.3)', icon: CheckCircle, label: status }
+      ? { bg: 'bg-green-500/10 text-green-400 border-green-500/30', icon: CheckCircle, label: status }
       : isRejected
-        ? { bg: 'rgba(239, 68, 68, 0.12)', color: '#f87171', border: 'rgba(239, 68, 68, 0.3)', icon: XCircle, label: status }
-        : { bg: 'rgba(234, 179, 8, 0.12)', color: '#facc15', border: 'rgba(234, 179, 8, 0.3)', icon: Clock, label: 'Pending' };
+        ? { bg: 'bg-red-500/10 text-red-400 border-red-500/30', icon: XCircle, label: status }
+        : { bg: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30', icon: Clock, label: 'Pending' };
 
     const Icon = config.icon;
 
     return (
-      <span style={{ backgroundColor: config.bg, color: config.color, border: `1px solid ${config.border}`, padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px', backdropFilter: 'blur(4px)' }}>
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border backdrop-blur-sm ${config.bg}`}>
         <Icon size={13} /> {config.label}
       </span>
     );
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0b1120', color: '#f8fafc', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-        .heading-font { font-family: 'Outfit', sans-serif; }
-        
-        .compact-input { width: 100%; padding: 10px 14px; border-radius: 10px; background-color: #0b1120; border: 1px solid #334155; color: #fff; font-size: 13px; outline: none; transition: all 0.2s ease; }
-        .compact-input:focus { border-color: #38bdf8; box-shadow: 0 0 10px rgba(56, 189, 248, 0.2); }
-        
-        .complaint-card { 
-          background: linear-gradient(145deg, #1e293b 0%, #151f30 100%); 
-          border: 1px solid #334155; 
-          border-radius: 16px; 
-          padding: 22px 24px; 
-          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        }
-        .complaint-card:hover {
-          transform: translateY(-2px);
-          border-color: #475569;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 0 15px rgba(56, 189, 248, 0.05);
-        }
-        
-        @media (max-width: 850px) { 
-          .desktop-sidebar { display: none !important; } 
-          .mobile-topbar { display: flex !important; } 
-          .main-content { padding: 75px 16px 28px 16px !important; }
-        }
-        @media (min-width: 851px) { 
-          .desktop-sidebar { display: flex !important; } 
-          .mobile-topbar { display: none !important; } 
-          .mobile-drawer { display: none !important; }
-          .main-content { padding: 36px 40px !important; }
-        }
-      `}</style>
-
+    <div className="flex min-h-screen bg-[#0b1120] text-slate-50 font-sans">
       {/* Desktop Sidebar */}
-      <aside className="desktop-sidebar" style={{ width: '270px', backgroundColor: '#0f172a', borderRight: '1px solid #1e293b', flexDirection: 'column', justifyContent: 'space-between', padding: '28px 20px', position: 'sticky', top: 0, height: '100vh' }}>
+      <aside className="hidden min-[851px]:flex w-[270px] bg-slate-900 border-r border-slate-800 flex-col justify-between p-7 sticky top-0 h-screen">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
-            <div style={{ backgroundColor: '#ffffff', padding: '9px', borderRadius: '12px', boxShadow: '0 0 15px rgba(255,255,255,0.2)' }}><Search size={20} color="#0f172a" /></div>
+          <div className="flex items-center gap-3 mb-8">
+            <div className="bg-white p-2.5 rounded-xl shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+              <Search size={20} className="text-slate-900" />
+            </div>
             <div>
-              <h2 className="heading-font" style={{ fontSize: '18px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '0.5px' }}>SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span></h2>
-              <span style={{ fontSize: '10px', color: '#38bdf8', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '1px' }}>Customer Portal</span>
+              <h2 className="text-lg font-extrabold text-white tracking-wider m-0">SUPPORT<span className="text-sky-400">SPHERE</span></h2>
+              <span className="text-[10px] text-sky-400 uppercase font-extrabold tracking-widest block">Customer Portal</span>
             </div>
           </div>
 
-          <div style={{ backgroundColor: '#1e293b', padding: '12px 14px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', border: '1px solid #334155' }}>
-            <div style={{ backgroundColor: '#ffffff', width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', color: '#0f172a', fontSize: '15px' }}>
+          <div className="bg-slate-800 p-3.5 rounded-xl flex items-center gap-3 mb-7 border border-slate-700">
+            <div className="bg-white w-9 h-9 rounded-lg flex items-center justify-center font-extrabold text-slate-900 text-base">
               {currentUserName ? currentUserName[0].toUpperCase() : 'U'}
             </div>
-            <div style={{ overflow: 'hidden' }}>
-              <p style={{ margin: 0, fontWeight: '700', fontSize: '13px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{currentUserName}</p>
-              <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#38bdf8', display: 'inline-block' }}></span> Active User
+            <div className="overflow-hidden">
+              <p className="m-0 font-bold text-xs truncate">{currentUserName}</p>
+              <span className="text-[10px] text-sky-400 font-bold flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block"></span> Active User
               </span>
             </div>
           </div>
 
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {[{ id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }].map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderRadius: '10px', border: 'none', backgroundColor: activeTab === tab.id ? '#ffffff' : 'transparent', color: activeTab === tab.id ? '#0f172a' : '#94a3b8', fontWeight: '700', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s', boxShadow: activeTab === tab.id ? '0 4px 12px rgba(255, 255, 255, 0.15)' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><tab.icon size={16} /> {tab.label}</div>
+          <nav className="flex flex-col gap-2">
+            {[
+              { id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, 
+              { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }
+            ].map((tab) => (
+              <button 
+                key={tab.id} 
+                onClick={() => setActiveTab(tab.id)} 
+                className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg border-0 font-bold cursor-pointer text-xs transition-all ${
+                  activeTab === tab.id 
+                    ? 'bg-white text-slate-900 shadow-[0_4px_12px_rgba(255,255,255,0.15)]' 
+                    : 'bg-transparent text-slate-400 hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-2.5"><tab.icon size={16} /> {tab.label}</div>
                 {activeTab === tab.id && <ChevronRight size={15} />}
               </button>
             ))}
           </nav>
         </div>
 
-        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '10px', border: 'none', backgroundColor: '#ef4444', color: '#ffffff', cursor: 'pointer', fontWeight: '700', fontSize: '12px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+        <motion.button 
+          whileHover={{ scale: 1.02 }} 
+          whileTap={{ scale: 0.97 }} 
+          onClick={handleLogout} 
+          className="flex items-center justify-center gap-2 p-2.5 rounded-lg border-0 bg-red-500 text-white cursor-pointer font-bold text-xs shadow-[0_4px_12px_rgba(239,68,68,0.25)]"
+        >
           <LogOut size={15} /> Log Out
         </motion.button>
       </aside>
@@ -276,24 +258,33 @@ export default function CustomerDashboard({ user }) {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 998 }} />
-            <motion.aside initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 220 }} className="mobile-drawer" style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '270px', zIndex: 999, backgroundColor: '#0f172a', padding: '24px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderRight: '1px solid #1e293b' }}>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[998]" />
+            <motion.aside initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 220 }} className="fixed top-0 left-0 bottom-0 w-[270px] z-[999] bg-slate-900 p-6 flex flex-col justify-between border-r border-slate-800">
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
-                  <h2 className="heading-font" style={{ fontSize: '17px', fontWeight: '800', color: '#fff', margin: 0 }}>SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span></h2>
-                  <button onClick={() => setIsMobileMenuOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+                <div className="flex justify-between items-center mb-7">
+                  <h2 className="text-base font-extrabold text-white m-0">SUPPORT<span className="text-sky-400">SPHERE</span></h2>
+                  <button onClick={() => setIsMobileMenuOpen(false)} className="bg-transparent border-0 text-slate-400 cursor-pointer"><X size={20} /></button>
                 </div>
 
-                <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {[{ id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }].map((tab) => (
-                    <button key={tab.id} onClick={() => { setActiveTab(tab.id); setIsMobileMenuOpen(false); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderRadius: '10px', border: 'none', backgroundColor: activeTab === tab.id ? '#ffffff' : 'transparent', color: activeTab === tab.id ? '#0f172a' : '#94a3b8', fontWeight: '700', cursor: 'pointer', fontSize: '13px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><tab.icon size={16} /> {tab.label}</div>
+                <nav className="flex flex-col gap-2">
+                  {[
+                    { id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, 
+                    { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }
+                  ].map((tab) => (
+                    <button 
+                      key={tab.id} 
+                      onClick={() => { setActiveTab(tab.id); setIsMobileMenuOpen(false); }} 
+                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg border-0 font-bold cursor-pointer text-xs ${
+                        activeTab === tab.id ? 'bg-white text-slate-900' : 'bg-transparent text-slate-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5"><tab.icon size={16} /> {tab.label}</div>
                     </button>
                   ))}
                 </nav>
               </div>
 
-              <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '10px', border: 'none', backgroundColor: '#ef4444', color: '#ffffff', cursor: 'pointer', fontWeight: '700', fontSize: '12px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+              <button onClick={handleLogout} className="flex items-center justify-center gap-2 p-2.5 rounded-lg border-0 bg-red-500 text-white cursor-pointer font-bold text-xs shadow-[0_4px_12px_rgba(239,68,68,0.25)]">
                 <LogOut size={15} /> Log Out
               </button>
             </motion.aside>
@@ -302,86 +293,86 @@ export default function CustomerDashboard({ user }) {
       </AnimatePresence>
 
       {/* Main Workspace */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Fixed Mobile Topbar */}
-        <header className="mobile-topbar" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '56px', padding: '0 16px', backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b', alignItems: 'center', justifyContent: 'space-between', zIndex: 90 }}>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} style={{ background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '6px', borderRadius: '8px', cursor: 'pointer' }}>
+        <header className="max-[850px]:flex hidden fixed top-0 left-0 right-0 h-[56px] px-4 bg-slate-900 border-b border-slate-800 items-center justify-between z-[90]">
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="bg-slate-800 border border-slate-700 text-white p-1.5 rounded-lg cursor-pointer">
             {isMobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
-          <span className="heading-font" style={{ fontWeight: '800', color: '#fff', fontSize: '15px' }}>SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span></span>
-          <div style={{ width: 30 }}></div>
+          <span className="font-extrabold text-white text-sm">SUPPORT<span className="text-sky-400">SPHERE</span></span>
+          <div className="w-[30px]"></div>
         </header>
 
-        <main className="main-content" style={{ flex: 1, overflowY: 'auto', maxWidth: '1100px', margin: '0 auto', width: '100%' }}>
+        <main className="flex-1 overflow-y-auto max-w-[1100px] mx-auto w-full max-[850px]:pt-[75px] max-[850px]:px-4 max-[850px]:pb-7 min-[851px]:p-[36px_40px]">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' ? (
-              <motion.div key="tab-dash" variants={cardVariant} initial="hidden" animate="visible" exit="exit" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid #334155', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.5)' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', marginBottom: '14px' }}>
+              <motion.div key="tab-dash" variants={cardVariant} initial="hidden" animate="visible" exit="exit" className="flex flex-col gap-5">
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-7 shadow-2xl">
+                  <div className="inline-flex items-center gap-1.5 bg-sky-400/10 text-sky-400 border border-sky-400/20 px-3 py-1 rounded-full text-[11px] font-bold mb-3.5">
                     <Sparkles size={13} /> SUPPORT SPHERE SYSTEM
                   </div>
-                  <h1 className="heading-font" style={{ fontSize: '28px', margin: '0 0 8px 0', color: '#ffffff', fontWeight: '800' }}>
-                    Welcome back, <span style={{ color: '#38bdf8' }}>{currentUserName}</span>
+                  <h1 className="text-2xl min-[851px]:text-3xl m-0 mb-2 text-white font-extrabold">
+                    Welcome back, <span className="text-sky-400">{currentUserName}</span>
                   </h1>
-                  <p style={{ color: '#94a3b8', margin: 0, fontSize: '13px', lineHeight: '1.5' }}>Lodge tickets and track live updates directly from workers.</p>
+                  <p className="text-slate-400 m-0 text-xs min-[851px]:text-sm leading-relaxed">Lodge tickets and track live updates directly from workers.</p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-                  <button onClick={() => setIsCreateModalOpen(true)} style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', border: 'none', borderRadius: '16px', padding: '20px', color: '#fff', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 8px 20px rgba(2, 132, 199, 0.3)' }}>
-                    <PlusCircle size={28} style={{ marginBottom: '12px' }} />
-                    <h3 className="heading-font" style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '700' }}>File New Complaint</h3>
-                    <p style={{ margin: 0, fontSize: '12px', opacity: 0.8 }}>Request maintenance or fix</p>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
+                  <button onClick={() => setIsCreateModalOpen(true)} className="bg-gradient-to-br from-sky-600 to-sky-700 border-0 rounded-2xl p-5 text-white text-left cursor-pointer transition-all shadow-[0_8px_20px_rgba(2,132,199,0.3)] hover:brightness-110">
+                    <PlusCircle size={28} className="mb-3" />
+                    <h3 className="m-0 mb-1 text-base font-bold">File New Complaint</h3>
+                    <p className="m-0 text-xs opacity-80">Request maintenance or fix</p>
                   </button>
 
-                  <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Total Complaints</span>
-                    <h2 className="heading-font" style={{ fontSize: '28px', margin: '4px 0 0 0', color: '#fff' }}>{tickets.length}</h2>
+                  <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col justify-center">
+                    <span className="text-xs text-slate-400 font-semibold">Total Complaints</span>
+                    <h2 className="text-3xl font-extrabold mt-1 m-0 text-white">{tickets.length}</h2>
                   </div>
                 </div>
               </motion.div>
             ) : (
-              <motion.div key="tab-complaints" variants={cardVariant} initial="hidden" animate="visible" exit="exit" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <motion.div key="tab-complaints" variants={cardVariant} initial="hidden" animate="visible" exit="exit" className="flex flex-col gap-5">
+                <div className="flex justify-between items-center flex-wrap gap-3">
                   <div>
-                    <h1 className="heading-font" style={{ fontSize: '24px', margin: 0, fontWeight: '800' }}>My Complaints</h1>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>View and track all your support requests</p>
+                    <h1 className="text-2xl m-0 font-extrabold text-white">My Complaints</h1>
+                    <p className="m-0 text-xs text-slate-400 mt-1">View and track all your support requests</p>
                   </div>
-                  <button onClick={() => setIsCreateModalOpen(true)} style={{ backgroundColor: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: '10px', padding: '10px 18px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button onClick={() => setIsCreateModalOpen(true)} className="bg-sky-400 hover:bg-sky-500 text-slate-900 border-0 rounded-lg px-4 py-2.5 font-bold text-xs cursor-pointer flex items-center gap-2 transition-colors">
                     <PlusCircle size={16} /> New Complaint
                   </button>
                 </div>
 
                 {loading ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Loading tickets...</div>
+                  <div className="p-10 text-center text-slate-400 text-sm">Loading tickets...</div>
                 ) : tickets.length === 0 ? (
-                  <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#1e293b', borderRadius: '16px', border: '1px solid #334155' }}>
-                    <p style={{ margin: 0, color: '#94a3b8' }}>No complaints found. Click "New Complaint" to get started.</p>
+                  <div className="p-10 text-center bg-slate-800/50 rounded-2xl border border-slate-700">
+                    <p className="m-0 text-slate-400 text-sm">No complaints found. Click "New Complaint" to get started.</p>
                   </div>
                 ) : (
-                  <div ref={cardsContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {tickets.map((ticket) => (
-                      <div key={ticket._id || Math.random()} className="complaint-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '10px' }}>
+                  <div ref={cardsContainerRef} className="flex flex-col gap-3">
+                    {tickets.map((ticket, index) => (
+                      <div key={ticket._id || index} className="bg-gradient-to-br from-slate-800 to-slate-900/80 border border-slate-700 hover:border-slate-600 rounded-2xl p-5.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
+                        <div className="flex justify-between items-start mb-3 gap-2.5">
                           <div>
-                            <h3 className="heading-font" style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#fff' }}>{ticket.title}</h3>
-                            <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: '600' }}>{ticket.category}</span>
+                            <h3 className="m-0 mb-1 text-base text-white font-bold">{ticket.title}</h3>
+                            <span className="text-xs text-sky-400 font-semibold">{ticket.category}</span>
                           </div>
                           {renderStatusBadge(ticket.status)}
                         </div>
 
-                        <p style={{ fontSize: '13px', color: '#cbd5e1', margin: '0 0 16px 0', lineHeight: '1.5' }}>{ticket.description}</p>
+                        <p className="text-xs text-slate-300 m-0 mb-4 leading-relaxed">{ticket.description}</p>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', paddingTop: '12px', borderTop: '1px solid #334155', fontSize: '12px', color: '#94a3b8' }}>
-                          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={14} /> {formatDate(ticket.date, ticket.createdAt)}</span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><HardHat size={14} /> Worker: {ticket.assignedWorker || 'Unassigned'}</span>
+                        <div className="flex justify-between items-center flex-wrap gap-3 pt-3 border-t border-slate-700/60 text-xs text-slate-400">
+                          <div className="flex gap-4 flex-wrap">
+                            <span className="flex items-center gap-1"><Calendar size={14} /> {formatDate(ticket.date, ticket.createdAt)}</span>
+                            <span className="flex items-center gap-1"><HardHat size={14} /> Worker: {ticket.assignedWorker || 'Unassigned'}</span>
                           </div>
 
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => handleOpenEdit(ticket)} style={{ background: 'none', border: '1px solid #334155', color: '#38bdf8', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div className="flex gap-2">
+                            <button onClick={() => handleOpenEdit(ticket)} className="bg-transparent border border-slate-700 text-sky-400 px-2.5 py-1.5 rounded-lg cursor-pointer text-xs flex items-center gap-1 hover:bg-slate-800 transition-colors">
                               <Edit2 size={13} /> Edit
                             </button>
-                            <button onClick={() => handleDeleteTicket(ticket._id)} style={{ background: 'none', border: '1px solid #334155', color: '#ef4444', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button onClick={() => handleDeleteTicket(ticket._id)} className="bg-transparent border border-slate-700 text-red-400 px-2.5 py-1.5 rounded-lg cursor-pointer text-xs flex items-center gap-1 hover:bg-slate-800 transition-colors">
                               <Trash2 size={13} /> Delete
                             </button>
                           </div>
@@ -399,11 +390,11 @@ export default function CustomerDashboard({ user }) {
       {/* CREATE TICKET MODAL */}
       <AnimatePresence>
         {isCreateModalOpen && (
-          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} style={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '18px', width: '100%', maxWidth: '500px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                <h2 className="heading-font" style={{ margin: 0, fontSize: '18px', color: '#fff' }}>File New Complaint</h2>
-                <button onClick={closeModal} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={18} /></button>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[500px] p-6 shadow-2xl">
+              <div className="flex justify-between items-center mb-4.5">
+                <h2 className="m-0 text-lg font-bold text-white">File New Complaint</h2>
+                <button onClick={closeModal} className="bg-transparent border-0 text-slate-400 cursor-pointer hover:text-white"><X size={18} /></button>
               </div>
 
               <CreateTicket user={user} onSuccess={handleTicketCreated} onClose={closeModal} />
@@ -415,23 +406,23 @@ export default function CustomerDashboard({ user }) {
       {/* EDIT TICKET MODAL */}
       <AnimatePresence>
         {isEditModalOpen && (
-          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} style={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '18px', width: '100%', maxWidth: '500px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                <h2 className="heading-font" style={{ margin: 0, fontSize: '18px', color: '#fff' }}>Edit Complaint</h2>
-                <button onClick={closeModal} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={18} /></button>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[500px] p-6 shadow-2xl">
+              <div className="flex justify-between items-center mb-4.5">
+                <h2 className="m-0 text-lg font-bold text-white">Edit Complaint</h2>
+                <button onClick={closeModal} className="bg-transparent border-0 text-slate-400 cursor-pointer hover:text-white"><X size={18} /></button>
               </div>
 
-              <form onSubmit={handleUpdateTicket} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <form onSubmit={handleUpdateTicket} className="flex flex-col gap-3.5">
                 <div>
-                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Issue Title</label>
-                  <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required className="compact-input" />
+                  <label className="text-[11px] text-slate-400 block mb-1 font-bold">Issue Title</label>
+                  <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required className="w-full px-3.5 py-2 rounded-lg bg-[#0b1120] border border-slate-700 text-white text-xs outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all" />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Category</label>
-                    <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="compact-input">
+                    <label className="text-[11px] text-slate-400 block mb-1 font-bold">Category</label>
+                    <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full px-3.5 py-2 rounded-lg bg-[#0b1120] border border-slate-700 text-white text-xs outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all">
                       <option value="Plumbing Fix">Plumbing Fix</option>
                       <option value="Electrical Issue">Electrical Issue</option>
                       <option value="Carpentry">Carpentry</option>
@@ -439,8 +430,8 @@ export default function CustomerDashboard({ user }) {
                     </select>
                   </div>
                   <div>
-                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Priority</label>
-                    <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} className="compact-input">
+                    <label className="text-[11px] text-slate-400 block mb-1 font-bold">Priority</label>
+                    <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} className="w-full px-3.5 py-2 rounded-lg bg-[#0b1120] border border-slate-700 text-white text-xs outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all">
                       <option value="Low">Low</option>
                       <option value="Normal">Normal</option>
                       <option value="High">High</option>
@@ -450,13 +441,13 @@ export default function CustomerDashboard({ user }) {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Description</label>
-                  <textarea rows="3" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required className="compact-input" style={{ resize: 'none' }}></textarea>
+                  <label className="text-[11px] text-slate-400 block mb-1 font-bold">Description</label>
+                  <textarea rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required className="w-full px-3.5 py-2 rounded-lg bg-[#0b1120] border border-slate-700 text-white text-xs outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all resize-none" />
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                  <button type="button" onClick={closeModal} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #334155', background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: '600', fontSize: '12px' }}>Cancel</button>
-                  <button type="submit" style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: '#38bdf8', color: '#0f172a', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}>Save Changes</button>
+                <div className="flex gap-2.5 mt-2">
+                  <button type="button" onClick={closeModal} className="flex-1 py-2.5 rounded-lg border border-slate-700 bg-slate-800 text-white cursor-pointer font-semibold text-xs hover:bg-slate-700 transition-colors">Cancel</button>
+                  <button type="submit" className="flex-1 py-2.5 rounded-lg border-0 bg-sky-400 text-slate-900 cursor-pointer font-bold text-xs hover:bg-sky-500 transition-colors">Save Changes</button>
                 </div>
               </form>
             </motion.div>

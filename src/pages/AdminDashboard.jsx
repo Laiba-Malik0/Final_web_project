@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import {
   ShieldCheck, CheckCircle, XCircle, Clock, RefreshCw, User, Mail,
   AlertCircle, LogOut, ChevronRight, Menu, X, LayoutDashboard,
-  ClipboardList, Wrench, Search, Cpu, Database, UserPlus
+  ClipboardList, Wrench, Search, Cpu, Database
 } from 'lucide-react';
 
 const API = axios.create({
@@ -48,32 +48,46 @@ export default function AdminDashboard({ user }) {
   const cardsContainerRef = useRef(null);
   const workersContainerRef = useRef(null);
 
+  // FIXED: Clean useCallback pattern without cascading renders
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
-    setErrorMsg('');
     try {
       const [ticketsRes, workersRes] = await Promise.all([
         API.get('/tickets/all'),
-        API.get('/users/workers')
+        API.get('/admin/users/workers'),
       ]);
 
-      const rawTickets = Array.isArray(ticketsRes.data) ? ticketsRes.data : (ticketsRes.data?.tickets || []);
-      const rawWorkers = Array.isArray(workersRes.data) ? workersRes.data : (workersRes.data?.workers || []);
+      const rawTickets = Array.isArray(ticketsRes.data)
+        ? ticketsRes.data
+        : Array.isArray(ticketsRes.data?.tickets)
+        ? ticketsRes.data.tickets
+        : [];
+
+      const rawWorkers = Array.isArray(workersRes.data)
+        ? workersRes.data
+        : Array.isArray(workersRes.data?.workers)
+        ? workersRes.data.workers
+        : [];
 
       setTickets(rawTickets);
       setWorkers(rawWorkers);
+      setErrorMsg('');
     } catch (err) {
+      console.error('Admin data fetch error:', err);
+      setTickets([]);
+      setWorkers([]);
       setErrorMsg('MongoDB / Backend connection error.');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // FIXED: Triggered cleanly with correct dependency array
   useEffect(() => {
     fetchAdminData();
   }, [fetchAdminData]);
 
-  // GSAP Animations with proper cleanup
+  // GSAP Animations
   useEffect(() => {
     let ctx = gsap.context(() => {
       if (activeTab === 'complaints' && cardsContainerRef.current && !loading) {
@@ -113,6 +127,7 @@ export default function AdminDashboard({ user }) {
     try {
       await API.put(`/tickets/update-status/${ticketId}`, { status: newStatus });
     } catch (err) {
+      console.error('Update Status Error:', err);
       setTickets(previousTickets);
       alert('Failed to update status in database.');
     } finally {
@@ -130,8 +145,9 @@ export default function AdminDashboard({ user }) {
     );
 
     try {
-      await API.put(`/tickets/assign-worker/${ticketId}`, { workerId });
+      await API.put(`/admin/tickets/assign/${ticketId}`, { workerId });
     } catch (err) {
+      console.error('Assign Worker Error:', err);
       setTickets(previousTickets);
       alert('Failed to assign worker in database.');
     } finally {
@@ -173,52 +189,65 @@ export default function AdminDashboard({ user }) {
     const isApproved = ['approved', 'in progress', 'resolved'].includes(s);
     const isRejected = ['rejected', 'reject', 'closed'].includes(s);
 
-    const config = isApproved
-      ? { bg: 'rgba(16, 185, 129, 0.12)', color: '#10b981', border: 'rgba(16, 185, 129, 0.3)', Icon: CheckCircle, pulse: '#10b981', text: status }
-      : isRejected
-        ? { bg: 'rgba(239, 68, 68, 0.12)', color: '#f87171', border: 'rgba(239, 68, 68, 0.3)', Icon: XCircle, pulse: '#f87171', text: status }
-        : { bg: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', border: 'rgba(245, 158, 11, 0.3)', Icon: Clock, pulse: '#f59e0b', text: 'Pending' };
-
+    if (isApproved) {
+      return (
+        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
+          <CheckCircle size={12} /> {status}
+        </span>
+      );
+    }
+    if (isRejected) {
+      return (
+        <span className="bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_8px_#f87171]" />
+          <XCircle size={12} /> {status}
+        </span>
+      );
+    }
     return (
-      <span style={{ backgroundColor: config.bg, color: config.color, border: `1px solid ${config.border}`, padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: config.pulse, boxShadow: `0 0 8px ${config.pulse}` }}></span>
-        <config.Icon size={12} /> {config.text}
+      <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+        <Clock size={12} /> Pending
       </span>
     );
   };
 
   const renderSidebar = () => (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <div className="h-full flex flex-col justify-between">
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ background: 'linear-gradient(135deg, #00f2fe 0%, #4facfe 100%)', padding: '9px', borderRadius: '10px', boxShadow: '0 0 15px rgba(0, 242, 254, 0.3)' }}>
-            <Cpu size={20} color="#080a0f" />
+        {/* Brand */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-gradient-to-br from-cyan-400 to-blue-500 p-2.2 rounded-lg shadow-[0_0_15px_rgba(0,242,254,0.3)]">
+            <Cpu size={20} className="text-slate-950" />
           </div>
           <div>
-            <h2 className="heading-font" style={{ fontSize: '17px', fontWeight: '800', color: '#ffffff', margin: 0 }}>
-              ADMIN<span style={{ color: '#00f2fe' }}>CORE</span>
+            <h2 className="text-base font-extrabold text-white m-0">
+              ADMIN<span className="text-cyan-400">CORE</span>
             </h2>
-            <span style={{ fontSize: '9px', color: '#64748b', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: '800' }}>Control Center</span>
+            <span className="text-[9px] text-slate-500 tracking-wider uppercase font-extrabold block">Control Center</span>
           </div>
         </div>
 
-        <div style={{ backgroundColor: '#0f172a', padding: '12px 14px', borderRadius: '10px', border: '1px solid #1e293b', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <div style={{ background: '#00f2fe', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', color: '#080a0f' }}>
+        {/* User Card */}
+        <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 mb-5">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="bg-cyan-400 w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-slate-950 text-sm">
               {currentUser?.name ? currentUser.name[0].toUpperCase() : 'A'}
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: '700', color: '#f8fafc', fontSize: '13px' }}>{currentUser?.name}</p>
-              <span style={{ fontSize: '10px', color: '#00f2fe', fontWeight: '700' }}>Super Admin Access</span>
+              <p className="m-0 font-bold text-slate-100 text-xs">{currentUser?.name}</p>
+              <span className="text-[10px] text-cyan-400 font-bold block">Super Admin Access</span>
             </div>
           </div>
-          <div style={{ fontSize: '10px', color: '#64748b', borderTop: '1px solid #1e293b', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Mail size={11} color="#00f2fe" /> {currentUser?.email}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Database size={11} color="#00f2fe" /> MongoDB: Connected</span>
+          <div className="text-[10px] text-slate-500 border-t border-slate-800 pt-2 flex flex-col gap-1">
+            <span className="flex items-center gap-1.5"><Mail size={11} className="text-cyan-400" /> {currentUser?.email}</span>
+            <span className="flex items-center gap-1.5"><Database size={11} className="text-cyan-400" /> MongoDB: Connected</span>
           </div>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {/* Nav Links */}
+        <nav className="flex flex-col gap-1.5">
           {[
             { id: 'dashboard', label: 'System Overview', icon: LayoutDashboard },
             { id: 'complaints', label: `Global Complaints (${tickets.length})`, icon: ClipboardList },
@@ -232,33 +261,29 @@ export default function AdminDashboard({ user }) {
                 whileHover={{ x: 4 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '8px', border: '1px solid',
-                  borderColor: isActive ? '#00f2fe' : 'transparent',
-                  backgroundColor: isActive ? 'rgba(0, 242, 254, 0.08)' : 'transparent',
-                  color: isActive ? '#00f2fe' : '#94a3b8',
-                  fontWeight: isActive ? '800' : '600', fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s'
-                }}
+                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all text-xs font-semibold cursor-pointer ${
+                  isActive
+                    ? 'border-cyan-400 bg-cyan-400/10 text-cyan-400 font-extrabold'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Icon size={16} color={isActive ? '#00f2fe' : '#64748b'} /> {item.label}
+                <div className="flex items-center gap-2.5">
+                  <Icon size={16} className={isActive ? 'text-cyan-400' : 'text-slate-500'} />
+                  {item.label}
                 </div>
-                <ChevronRight size={14} color={isActive ? '#00f2fe' : '#475569'} />
+                <ChevronRight size={14} className={isActive ? 'text-cyan-400' : 'text-slate-600'} />
               </motion.button>
             );
           })}
         </nav>
       </div>
 
+      {/* Logout */}
       <motion.button
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.96 }}
         onClick={handleLogout}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px',
-          borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)', backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          color: '#f87171', cursor: 'pointer', fontWeight: '700', fontSize: '12px', transition: 'all 0.2s'
-        }}
+        className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer font-bold text-xs transition-all"
       >
         <LogOut size={14} /> Exit System Session
       </motion.button>
@@ -266,39 +291,43 @@ export default function AdminDashboard({ user }) {
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#080a0f', color: '#f8fafc', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-        .heading-font { font-family: 'Outfit', sans-serif; }
-        .admin-card { background: #0f172a; border: 1px solid #1e293b; border-left: 3px solid #00f2fe; border-radius: 12px; padding: 16px 20px; transition: transform 0.2s ease, border-color 0.2s ease; }
-        .admin-card:hover { transform: translateY(-2px); border-color: #00f2fe; }
-        .filter-select { background-color: #080a0f; color: #f8fafc; border: 1px solid #1e293b; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; outline: none; }
-        @media (max-width: 850px) { .desktop-sidebar { display: none !important; } .mobile-header { display: flex !important; } .main-content { padding: 75px 14px 24px 14px !important; } }
-        @media (min-width: 851px) { .desktop-sidebar { display: flex !important; } .mobile-header { display: none !important; } .main-content { padding: 28px 32px !important; } }
-      `}</style>
-
+    <div className="flex min-h-screen bg-[#080a0f] text-slate-100 font-sans">
       {/* DESKTOP SIDEBAR */}
-      <aside className="desktop-sidebar" style={{ width: '250px', backgroundColor: '#05070a', borderRight: '1px solid #1e293b', padding: '20px 16px', flexDirection: 'column' }}>
+      <aside className="hidden md:flex w-64 bg-[#05070a] border-r border-slate-800 p-5 flex-col shrink-0">
         {renderSidebar()}
       </aside>
 
       {/* MOBILE TOPBAR */}
-      <div className="mobile-header" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '56px', backgroundColor: '#05070a', borderBottom: '1px solid #1e293b', display: 'none', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', zIndex: 99 }}>
-        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}>
-          <Menu size={22} color="#00f2fe" />
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[#05070a] border-b border-slate-800 flex items-center justify-between px-4 z-40">
+        <button onClick={() => setSidebarOpen(true)} className="bg-transparent border-0 text-white cursor-pointer">
+          <Menu size={22} className="text-cyan-400" />
         </button>
-        <h2 className="heading-font" style={{ fontSize: '15px', fontWeight: '800', color: '#ffffff', margin: 0 }}>ADMINCORE</h2>
-        <div style={{ width: 22 }}></div>
+        <h2 className="text-sm font-extrabold text-white m-0">ADMINCORE</h2>
+        <div className="w-5" />
       </div>
 
       {/* MOBILE DRAWER */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100 }} />
-            <motion.aside initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 220 }} style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '260px', backgroundColor: '#05070a', borderRight: '1px solid #1e293b', padding: '16px', zIndex: 101 }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-                <button onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={18} /></button>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 bg-black/80 z-50 md:hidden"
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed top-0 left-0 bottom-0 w-64 bg-[#05070a] border-r border-slate-800 p-4 z-50 md:hidden"
+            >
+              <div className="flex justify-end mb-2">
+                <button onClick={() => setSidebarOpen(false)} className="bg-transparent border-0 text-slate-400 cursor-pointer">
+                  <X size={18} />
+                </button>
               </div>
               {renderSidebar()}
             </motion.aside>
@@ -307,11 +336,15 @@ export default function AdminDashboard({ user }) {
       </AnimatePresence>
 
       {/* MAIN CONTENT AREA */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <main className="main-content" style={{ flex: 1, overflowY: 'auto', maxWidth: '1100px', margin: '0 auto', width: '100%' }}>
+      <div className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full pt-20 px-4 pb-8 md:p-8">
 
           {errorMsg && (
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontSize: '12px' }}>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-500/10 border border-red-500/30 p-3 rounded-lg mb-4 flex items-center gap-2 text-red-400 text-xs"
+            >
               <AlertCircle size={16} /> {errorMsg}
             </motion.div>
           )}
@@ -319,51 +352,67 @@ export default function AdminDashboard({ user }) {
           <AnimatePresence mode="wait">
             {/* TAB 1: OVERVIEW */}
             {activeTab === 'dashboard' && (
-              <motion.div key="overview" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
-                <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderLeft: '4px solid #00f2fe', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ background: '#00f2fe', padding: '10px', borderRadius: '10px', boxShadow: '0 0 15px rgba(0, 242, 254, 0.3)' }}>
-                      <ShieldCheck size={24} color="#080a0f" />
+              <motion.div
+                key="overview"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="bg-slate-900 border border-slate-800 border-l-4 border-l-cyan-400 rounded-xl p-6 mb-5">
+                  <div className="flex items-center gap-3.5">
+                    <div className="bg-cyan-400 p-2.5 rounded-lg shadow-[0_0_15px_rgba(0,242,254,0.3)]">
+                      <ShieldCheck size={24} className="text-slate-950" />
                     </div>
                     <div>
-                      <h1 className="heading-font" style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#ffffff' }}>
-                        Command Terminal • <span style={{ color: '#00f2fe' }}>System Analytics</span>
+                      <h1 className="m-0 text-xl font-extrabold text-white">
+                        Command Terminal • <span className="text-cyan-400">System Analytics</span>
                       </h1>
-                      <p style={{ margin: '3px 0 0 0', color: '#94a3b8', fontSize: '12px' }}>Overall platform performance metrics and operation dispatches.</p>
+                      <p className="mt-1 mb-0 text-slate-400 text-xs">Overall platform performance metrics and operation dispatches.</p>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
                   {[
-                    { title: 'Total System Tickets', count: dynamicAnalytics.totalTickets, color: '#ffffff', Icon: ClipboardList, iconColor: '#00f2fe' },
-                    { title: 'Pending Clearance', count: dynamicAnalytics.pending, color: '#f59e0b', Icon: Clock, iconColor: '#f59e0b' },
-                    { title: 'Approved / In-Progress', count: dynamicAnalytics.inProgress, color: '#38bdf8', Icon: CheckCircle, iconColor: '#38bdf8' },
-                    { title: 'Resolved History Logs', count: dynamicAnalytics.resolved, color: '#10b981', Icon: CheckCircle, iconColor: '#10b981' }
+                    { title: 'Total System Tickets', count: dynamicAnalytics.totalTickets, color: 'text-white', Icon: ClipboardList, borderTop: 'border-t-cyan-400', iconColor: '#00f2fe' },
+                    { title: 'Pending Clearance', count: dynamicAnalytics.pending, color: 'text-amber-500', Icon: Clock, borderTop: 'border-t-amber-500', iconColor: '#f59e0b' },
+                    { title: 'Approved / In-Progress', count: dynamicAnalytics.inProgress, color: 'text-sky-400', Icon: CheckCircle, borderTop: 'border-t-sky-400', iconColor: '#38bdf8' },
+                    { title: 'Resolved History Logs', count: dynamicAnalytics.resolved, color: 'text-emerald-500', Icon: CheckCircle, borderTop: 'border-t-emerald-500', iconColor: '#10b981' }
                   ].map((stat, i) => (
-                    <motion.div key={i} whileHover={{ y: -3 }} style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', padding: '16px', borderRadius: '10px', borderTop: '2px solid ' + stat.iconColor }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>{stat.title}</span>
+                    <motion.div key={i} whileHover={{ y: -3 }} className={`bg-slate-900 border border-slate-800 p-4 rounded-lg border-t-2 ${stat.borderTop}`}>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] text-slate-500 font-bold uppercase">{stat.title}</span>
                         <stat.Icon size={16} color={stat.iconColor} />
                       </div>
-                      <p className="heading-font" style={{ fontSize: '26px', fontWeight: '800', margin: '8px 0 0 0', color: stat.color }}>{stat.count}</p>
+                      <p className={`text-2xl font-extrabold mt-2 mb-0 ${stat.color}`}>{stat.count}</p>
                     </motion.div>
                   ))}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-                  <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', padding: '18px 20px', borderRadius: '12px' }}>
-                    <h3 className="heading-font" style={{ margin: 0, color: '#ffffff', fontSize: '15px' }}>Live Complaints Dispatch</h3>
-                    <p style={{ margin: '4px 0 16px 0', color: '#94a3b8', fontSize: '11px' }}>Inspect and process MongoDB live customer issues.</p>
-                    <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setActiveTab('complaints')} style={{ backgroundColor: '#00f2fe', color: '#080a0f', border: 'none', padding: '7px 14px', borderRadius: '6px', fontWeight: '800', fontSize: '11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+                    <h3 className="m-0 text-white text-sm font-bold">Live Complaints Dispatch</h3>
+                    <p className="mt-1 mb-4 text-slate-400 text-xs">Inspect and process MongoDB live customer issues.</p>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setActiveTab('complaints')}
+                      className="bg-cyan-400 text-slate-950 border-0 px-3.5 py-2 rounded-md font-extrabold text-xs cursor-pointer inline-flex items-center gap-1.5"
+                    >
                       Manage MongoDB Complaints ({tickets.length}) <ChevronRight size={13} />
                     </motion.button>
                   </div>
 
-                  <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', padding: '18px 20px', borderRadius: '12px' }}>
-                    <h3 className="heading-font" style={{ margin: 0, color: '#ffffff', fontSize: '15px' }}>Field Technicians Roster</h3>
-                    <p style={{ margin: '4px 0 16px 0', color: '#94a3b8', fontSize: '11px' }}>Inspect active workforce database entries.</p>
-                    <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setActiveTab('workers')} style={{ backgroundColor: 'transparent', color: '#00f2fe', border: '1px solid #00f2fe', padding: '7px 14px', borderRadius: '6px', fontWeight: '800', fontSize: '11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+                    <h3 className="m-0 text-white text-sm font-bold">Field Technicians Roster</h3>
+                    <p className="mt-1 mb-4 text-slate-400 text-xs">Inspect active workforce database entries.</p>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setActiveTab('workers')}
+                      className="bg-transparent text-cyan-400 border border-cyan-400 px-3.5 py-2 rounded-md font-extrabold text-xs cursor-pointer inline-flex items-center gap-1.5"
+                    >
                       Inspect Registered Workers ({workers.length}) <Wrench size={13} />
                     </motion.button>
                   </div>
@@ -373,26 +422,49 @@ export default function AdminDashboard({ user }) {
 
             {/* TAB 2: COMPLAINTS STREAM */}
             {activeTab === 'complaints' && (
-              <motion.div key="complaints" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+              <motion.div
+                key="complaints"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
                   <div>
-                    <h1 className="heading-font" style={{ color: '#ffffff', margin: '0 0 4px 0', fontSize: '22px', fontWeight: '800' }}>Master Complaints Stream</h1>
-                    <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Live records fetched directly from MongoDB database.</p>
+                    <h1 className="text-white m-0 text-xl font-extrabold">Master Complaints Stream</h1>
+                    <p className="text-slate-400 text-xs m-0">Live records fetched directly from MongoDB database.</p>
                   </div>
-                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={fetchAdminData} disabled={loading} style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#00f2fe', padding: '7px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '700' }}>
-                    <RefreshCw size={13} /> Sync MongoDB
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={fetchAdminData}
+                    disabled={loading}
+                    className="bg-slate-900 border border-slate-800 text-cyan-400 px-3 py-1.5 rounded-md cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                  >
+                    <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Sync MongoDB
                   </motion.button>
                 </div>
 
-                <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', padding: '12px 16px', borderRadius: '10px', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '1 1 200px', backgroundColor: '#080a0f', border: '1px solid #1e293b', padding: '4px 10px', borderRadius: '6px' }}>
-                    <Search size={14} color="#00f2fe" />
-                    <input type="text" placeholder="Search ticket titles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ background: 'transparent', border: 'none', color: '#ffffff', fontSize: '11px', outline: 'none', width: '100%' }} />
+                {/* Filters */}
+                <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg mb-4 flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-[200px] bg-[#080a0f] border border-slate-800 px-2.5 py-1 rounded-md">
+                    <Search size={14} className="text-cyan-400" />
+                    <input
+                      type="text"
+                      placeholder="Search ticket titles..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="bg-transparent border-0 text-white text-xs outline-none w-full"
+                    />
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '700' }}>STATUS:</label>
-                    <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-slate-500 font-bold">STATUS:</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none"
+                    >
                       <option value="all">All Status</option>
                       <option value="pending">Pending</option>
                       <option value="approved">Approved</option>
@@ -400,9 +472,13 @@ export default function AdminDashboard({ user }) {
                     </select>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '700' }}>PRIORITY:</label>
-                    <select className="filter-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-slate-500 font-bold">PRIORITY:</label>
+                    <select
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none"
+                    >
                       <option value="all">All Priorities</option>
                       <option value="normal">Normal</option>
                       <option value="emergency">Emergency</option>
@@ -410,55 +486,62 @@ export default function AdminDashboard({ user }) {
                     </select>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '700' }}>CATEGORY:</label>
-                    <select className="filter-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-slate-500 font-bold">CATEGORY:</label>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none"
+                    >
                       {ALL_CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
                     </select>
                   </div>
                 </div>
 
                 {loading ? (
-                  <p style={{ color: '#94a3b8', fontSize: '12px' }}>Fetching complaints...</p>
+                  <p className="text-slate-400 text-xs">Fetching complaints...</p>
                 ) : filteredTickets.length === 0 ? (
-                  <div style={{ backgroundColor: '#0f172a', border: '1px dashed #1e293b', borderRadius: '12px', padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
-                    <p style={{ margin: 0, fontSize: '13px' }}>No matching complaints found.</p>
+                  <div className="bg-slate-900 border border-dashed border-slate-800 rounded-xl p-10 text-center text-slate-400">
+                    <p className="m-0 text-xs">No matching complaints found.</p>
                   </div>
                 ) : (
-                  <div ref={cardsContainerRef} style={{ display: 'grid', gap: '12px' }}>
+                  <div ref={cardsContainerRef} className="grid gap-3">
                     {filteredTickets.map((ticket) => (
-                      <div key={ticket._id} className="admin-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <h2 className="heading-font" style={{ margin: 0, color: '#ffffff', fontSize: '16px', fontWeight: '700' }}>{ticket.title}</h2>
-                            <span style={{ backgroundColor: '#080a0f', color: '#00f2fe', fontSize: '10px', padding: '3px 8px', borderRadius: '4px', border: '1px solid #1e293b', fontWeight: '700' }}>
+                      <div key={ticket._id} className="bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-xl transition-colors">
+                        <div className="flex justify-between items-center flex-wrap gap-2.5 mb-2.5">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <h2 className="m-0 text-white text-base font-bold">{ticket.title}</h2>
+                            <span className="bg-[#080a0f] text-cyan-400 text-[10px] px-2 py-0.5 rounded border border-slate-800 font-bold">
                               {ticket.category || 'General'}
                             </span>
-                            <span style={{ backgroundColor: ticket.priority === 'Emergency' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(148, 163, 184, 0.1)', color: ticket.priority === 'Emergency' ? '#f87171' : '#94a3b8', fontSize: '10px', padding: '3px 8px', borderRadius: '4px', fontWeight: '700' }}>
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                              ticket.priority === 'Emergency'
+                                ? 'bg-red-500/15 text-red-400'
+                                : 'bg-slate-500/10 text-slate-400'
+                            }`}>
                               {ticket.priority || 'Normal'}
                             </span>
                           </div>
                           {renderStatusBadge(ticket.status)}
                         </div>
 
-                        <p style={{ margin: '0 0 12px 0', color: '#cbd5e1', fontSize: '12px', lineHeight: '1.5', backgroundColor: '#080a0f', padding: '10px 12px', borderRadius: '6px', border: '1px solid #1e293b' }}>
+                        <p className="mt-0 mb-3 text-slate-300 text-xs leading-relaxed bg-[#080a0f] p-3 rounded-lg border border-slate-800">
                           {ticket.description}
                         </p>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#64748b' }}>
-                              <User size={12} color="#00f2fe" /> <strong style={{ color: '#f8fafc' }}>Customer:</strong> {ticket.user?.name || ticket.userName || 'Customer User'}
+                        <div className="flex justify-between items-center flex-wrap gap-3 pt-2.5 border-t border-white/5">
+                          <div className="flex gap-4 flex-wrap items-center">
+                            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <User size={12} className="text-cyan-400" /> <strong className="text-slate-100">Customer:</strong> {ticket.user?.name || ticket.userName || 'Customer User'}
                             </span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <Wrench size={12} color="#f59e0b" />
-                              <strong style={{ color: '#f8fafc', fontSize: '11px' }}>Assign Worker:</strong>
+                            <div className="flex items-center gap-1.5">
+                              <Wrench size={12} className="text-amber-500" />
+                              <strong className="text-slate-100 text-xs">Assign Worker:</strong>
                               <select 
-                                className="filter-select"
                                 value={ticket.assignedWorker?._id || ticket.assignedWorker || ''}
                                 onChange={(e) => handleWorkerAssign(ticket._id, e.target.value)}
                                 disabled={updatingId === ticket._id}
-                                style={{ padding: '2px 6px', fontSize: '11px' }}
+                                className="bg-[#080a0f] border border-slate-800 text-white rounded px-1.5 py-0.5 text-xs outline-none"
                               >
                                 <option value="">Unassigned</option>
                                 {workers.map((w) => (
@@ -468,13 +551,13 @@ export default function AdminDashboard({ user }) {
                             </div>
                           </div>
 
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <div className="flex gap-2 items-center">
                             <motion.button
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
                               onClick={() => handleStatusUpdate(ticket._id, 'Approved')}
                               disabled={updatingId === ticket._id}
-                              style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid #10b981', padding: '5px 12px', borderRadius: '6px', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}
+                              className="bg-emerald-500/15 text-emerald-400 border border-emerald-500 px-3 py-1 rounded-md font-bold text-xs cursor-pointer"
                             >
                               Approve
                             </motion.button>
@@ -483,7 +566,7 @@ export default function AdminDashboard({ user }) {
                               whileTap={{ scale: 0.95 }}
                               onClick={() => handleStatusUpdate(ticket._id, 'Rejected')}
                               disabled={updatingId === ticket._id}
-                              style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid #f87171', padding: '5px 12px', borderRadius: '6px', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}
+                              className="bg-red-500/15 text-red-400 border border-red-500 px-3 py-1 rounded-md font-bold text-xs cursor-pointer"
                             >
                               Reject
                             </motion.button>
@@ -498,29 +581,35 @@ export default function AdminDashboard({ user }) {
 
             {/* TAB 3: WORKERS DIRECTORY */}
             {activeTab === 'workers' && (
-              <motion.div key="workers" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
-                <div style={{ marginBottom: '18px' }}>
-                  <h1 className="heading-font" style={{ color: '#ffffff', margin: '0 0 4px 0', fontSize: '22px', fontWeight: '800' }}>Technicians Directory</h1>
-                  <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Registered field workers from database.</p>
+              <motion.div
+                key="workers"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="mb-4">
+                  <h1 className="text-white m-0 text-xl font-extrabold">Technicians Directory</h1>
+                  <p className="text-slate-400 text-xs m-0">Registered field workers from database.</p>
                 </div>
 
-                <div ref={workersContainerRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
+                <div ref={workersContainerRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {loading ? (
-                    <p style={{ color: '#94a3b8', fontSize: '12px' }}>Loading workers...</p>
+                    <p className="text-slate-400 text-xs">Loading workers...</p>
                   ) : workers.map((w) => (
-                    <div key={w._id} style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '10px', padding: '16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                        <div style={{ background: '#f59e0b', width: '38px', height: '38px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', color: '#080a0f' }}>
+                    <div key={w._id} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="bg-amber-500 w-9 h-9 rounded-lg flex items-center justify-center font-extrabold text-slate-950 text-sm">
                           {w.name ? w.name[0].toUpperCase() : 'W'}
                         </div>
                         <div>
-                          <h3 style={{ margin: 0, color: '#ffffff', fontSize: '14px', fontWeight: '700' }}>{w.name}</h3>
-                          <span style={{ fontSize: '10px', color: '#00f2fe', fontWeight: '700' }}>{w.category || 'Technician'}</span>
+                          <h3 className="m-0 text-white text-sm font-bold">{w.name}</h3>
+                          <span className="text-[10px] text-cyan-400 font-bold block">{w.category || 'Technician'}</span>
                         </div>
                       </div>
-                      <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid #1e293b', paddingTop: '10px' }}>
-                        <span><strong style={{ color: '#f8fafc' }}>Email:</strong> {w.email}</span>
-                        <span><strong style={{ color: '#f8fafc' }}>Role:</strong> {w.role}</span>
+                      <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-800 pt-2.5">
+                        <span><strong className="text-slate-100">Email:</strong> {w.email}</span>
+                        <span><strong className="text-slate-100">Role:</strong> {w.role}</span>
                       </div>
                     </div>
                   ))}

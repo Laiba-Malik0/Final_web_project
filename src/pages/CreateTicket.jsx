@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { motion } from 'framer-motion';
-import { Sparkles, CheckCircle, PlusCircle } from 'lucide-react';
+import { PlusCircle } from 'lucide-react';
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'https://final-web-backend-eta.vercel.app/api',
 });
+
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -20,7 +20,8 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
       try {
         const parsed = JSON.parse(storedUser);
         if (parsed.name) return parsed.name;
-      } catch (e) {}
+      // eslint-disable-next-line no-unused-vars
+      } catch (e) { /* empty */ }
     }
     return localStorage.getItem('userName') || 'Customer';
   };
@@ -71,21 +72,41 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
     }
   };
 
+  const inputStyles = "w-full bg-[#080a0f] border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-400 transition-colors";
+
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
       <div>
-        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Customer Name</label>
-        <input type="text" value={formData.userName} disabled className="compact-input locked-input" />
+        <label className="text-[11px] text-slate-400 block mb-1 font-bold">Customer Name</label>
+        <input 
+          type="text" 
+          value={formData.userName} 
+          disabled 
+          className={`${inputStyles} bg-slate-900/50 text-slate-400 cursor-not-allowed`} 
+        />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <div>
-          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Issue Title</label>
-          <input type="text" name="title" required value={formData.title} onChange={handleChange} placeholder="e.g. Pipe Leakage" className="compact-input" />
+          <label className="text-[11px] text-slate-400 block mb-1 font-bold">Issue Title</label>
+          <input 
+            type="text" 
+            name="title" 
+            required 
+            value={formData.title} 
+            onChange={handleChange} 
+            placeholder="e.g. Pipe Leakage" 
+            className={inputStyles} 
+          />
         </div>
         <div>
-          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Category</label>
-          <select name="category" value={formData.category} onChange={handleChange} className="compact-input">
+          <label className="text-[11px] text-slate-400 block mb-1 font-bold">Category</label>
+          <select 
+            name="category" 
+            value={formData.category} 
+            onChange={handleChange} 
+            className={inputStyles}
+          >
             <option value="Plumbing Fix">Plumbing Fix</option>
             <option value="Electrical Issue">Electrical Issue</option>
             <option value="Carpentry">Carpentry</option>
@@ -94,10 +115,15 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <div>
-          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Priority</label>
-          <select name="priority" value={formData.priority} onChange={handleChange} className="compact-input">
+          <label className="text-[11px] text-slate-400 block mb-1 font-bold">Priority</label>
+          <select 
+            name="priority" 
+            value={formData.priority} 
+            onChange={handleChange} 
+            className={inputStyles}
+          >
             <option value="Low">Low</option>
             <option value="Normal">Normal</option>
             <option value="High">High</option>
@@ -105,14 +131,25 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
           </select>
         </div>
         <div>
-          <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Preferred Date</label>
-          <input type="date" name="date" value={formData.date} onChange={handleChange} className="compact-input" />
+          <label className="text-[11px] text-slate-400 block mb-1 font-bold">Preferred Date</label>
+          <input 
+            type="date" 
+            name="date" 
+            value={formData.date} 
+            onChange={handleChange} 
+            className={inputStyles} 
+          />
         </div>
       </div>
 
       <div>
-        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Select Worker (Optional)</label>
-        <select name="assignedWorker" value={formData.assignedWorker} onChange={handleChange} className="compact-input">
+        <label className="text-[11px] text-slate-400 block mb-1 font-bold">Select Worker (Optional)</label>
+        <select 
+          name="assignedWorker" 
+          value={formData.assignedWorker} 
+          onChange={handleChange} 
+          className={inputStyles}
+        >
           <option value="">-- Auto Assign / Any Available --</option>
           {workersList.map((w) => (
             <option key={w._id || w.id} value={w.name}>{w.name} ({w.specialization || 'Worker'})</option>
@@ -121,15 +158,31 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
       </div>
 
       <div>
-        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: '700' }}>Description</label>
-        <textarea name="description" rows="3" required value={formData.description} onChange={handleChange} placeholder="Describe your issue..." className="compact-input" style={{ resize: 'none' }}></textarea>
+        <label className="text-[11px] text-slate-400 block mb-1 font-bold">Description</label>
+        <textarea 
+          name="description" 
+          rows="3" 
+          required 
+          value={formData.description} 
+          onChange={handleChange} 
+          placeholder="Describe your issue..." 
+          className={`${inputStyles} resize-none`}
+        ></textarea>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-        <button type="button" onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #334155', background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: '600', fontSize: '12px' }}>
+      <div className="flex gap-2.5 mt-2">
+        <button 
+          type="button" 
+          onClick={onClose} 
+          className="flex-1 py-2.5 rounded-lg border border-slate-700 bg-slate-800 text-white cursor-pointer font-semibold text-xs hover:bg-slate-700 transition-colors"
+        >
           Cancel
         </button>
-        <button type="submit" disabled={submitting} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: '#38bdf8', color: '#0f172a', cursor: 'pointer', fontWeight: '700', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+        <button 
+          type="submit" 
+          disabled={submitting} 
+          className="flex-1 py-2.5 rounded-lg border-0 bg-sky-400 text-slate-950 cursor-pointer font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-sky-300 disabled:opacity-60 transition-colors"
+        >
           {submitting ? 'Submitting...' : <><PlusCircle size={15} /> Submit Ticket</>}
         </button>
       </div>

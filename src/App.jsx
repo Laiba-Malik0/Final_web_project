@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import { useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import Login from './pages/Login';
@@ -14,26 +14,36 @@ import Navbar from './components/Navbar';
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useContext(AuthContext);
 
-  if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#0A0706] text-cyan-400 font-bold">
+        Loading Session...
+      </div>
+    );
+  }
+
   if (!user) return <Navigate to="/login" replace />;
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
 
   return children;
 };
 
-// Root Dashboard Redirect based on Role
+// Root Dashboard Redirect based on Role (FIXED NULL CHECK)
 const RoleBasedRedirect = () => {
   const { user } = useContext(AuthContext);
 
-  switch (user?.role) {
+  if (!user) return <Navigate to="/login" replace />;
+
+  switch (user.role) {
     case 'admin':
       return <AdminDashboard user={user} />;
     case 'worker':
     case 'agent':
       return <WorkerDashboard />;
     case 'customer':
-    default:
       return <CustomerDashboard />;
+    default:
+      return <Navigate to="/login" replace />;
   }
 };
 
