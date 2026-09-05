@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useCallback } from 'react';
+import { useEffect, useState, useContext, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import API from '../api';
 import { AuthContext } from '../context/AuthContext';
@@ -6,10 +6,6 @@ import io from 'socket.io-client';
 import confetti from 'canvas-confetti';
 import { Bot, Send, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-// Dynamic Socket URL with Fallback
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const socket = io(SOCKET_URL);
 
 export default function TicketDetail() {
   const { id } = useParams();
@@ -23,10 +19,18 @@ export default function TicketDetail() {
   const [status, setStatus] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
 
+  const socketRef = useRef(null);
+  const chatEndRef = useRef(null);
+
+  // Auto Scroll to Bottom on New Message
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const loadTicket = useCallback(() => {
     API.get(`/tickets/${id}`).then(({ data }) => {
       setTicket(data.ticket);
-      setMessages(data.messages);
+      setMessages(data.messages || []);
       setCategory(data.ticket.category);
       setPriority(data.ticket.priority);
       setStatus(data.ticket.status);
@@ -38,6 +42,19 @@ export default function TicketDetail() {
 
   useEffect(() => {
     loadTicket();
+
+    // Vercel Compatible Dynamic Socket Initialization
+    const rawUrl = import.meta.env.VITE_API_URL || 'https://final-web-backend-eta.vercel.app';
+    const socketBase = rawUrl.replace(/\/api\/?$/, '');
+
+    const socket = io(socketBase, {
+      transports: ['polling'],
+      withCredentials: true,
+      autoConnect: true
+    });
+
+    socketRef.current = socket;
+
     socket.emit('join_room', id);
 
     socket.on('receive_message', (msg) => {
@@ -52,16 +69,22 @@ export default function TicketDetail() {
     return () => {
       socket.off('receive_message');
       socket.off('ticket_updated');
+      socket.disconnect();
     };
   }, [id, loadTicket]);
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!newMsg.trim()) return;
-    socket.emit('send_message', {
+    if (!newMsg.trim() || !socketRef.current) return;
+    
+    socketRef.current.emit('send_message', {
       ticketId: id,
-      senderId: user.id,
-      senderRole: user.role,
+      senderId: user?.id || user?._id,
+      senderRole: user?.role,
       message: newMsg
     });
     setNewMsg('');
@@ -110,18 +133,30 @@ export default function TicketDetail() {
           </div>
 
           {messages.map((m, idx) => (
-            <div key={idx} className={`flex flex-col ${m.senderRole === user.role ? 'items-end' : 'items-start'}`}>
+            <div key={idx} className={`flex flex-col ${m.senderRole === user?.role ? 'items-end' : 'items-start'}`}>
               <div className={`p-3.5 rounded-2xl max-w-md text-xs shadow-md border ${m.senderRole === 'AGENT' ? 'bg-indigo-600 text-white border-indigo-500/50' : 'bg-slate-800 text-slate-200 border-slate-700'}`}>
-                <p className="font-bold text-[9px] opacity-75 mb-1 uppercase tracking-wider">{m.senderId?.name} ({m.senderRole})</p>
+                <p className="font-bold text-[9px] opacity-75 mb-1 uppercase tracking-wider">{m.senderId?.name || 'User'} ({m.senderRole})</p>
                 <p className="leading-relaxed">{m.message}</p>
               </div>
             </div>
           ))}
+          <div ref={chatEndRef} />
         </div>
 
         <form onSubmit={handleSendMessage} className="mt-4 flex gap-2">
-          <input type="text" placeholder={ticket.status === 'Resolved' ? 'Ticket is resolved (Chat locked)' : 'Type your message...'} disabled={ticket.status === 'Resolved'} className="flex-1 bg-slate-900 border border-slate-800 text-slate-200 p-3.5 rounded-xl focus:border-indigo-500 outline-none text-xs disabled:opacity-50" value={newMsg} onChange={e => setNewMsg(e.target.value)} />
-          <button type="submit" disabled={ticket.status === 'Resolved'} className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl font-bold transition disabled:opacity-50 flex items-center gap-1.5 text-xs shadow-lg shadow-indigo-600/20 border border-indigo-400/30">
+          <input 
+            type="text" 
+            placeholder={ticket.status === 'Resolved' ? 'Ticket is resolved (Chat locked)' : 'Type your message...'} 
+            disabled={ticket.status === 'Resolved'} 
+            className="flex-1 bg-slate-900 border border-slate-800 text-slate-200 p-3.5 rounded-xl focus:border-indigo-500 outline-none text-xs disabled:opacity-50" 
+            value={newMsg} 
+            onChange={e => setNewMsg(e.target.value)} 
+          />
+          <button 
+            type="submit" 
+            disabled={ticket.status === 'Resolved'} 
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl font-bold transition disabled:opacity-50 flex items-center gap-1.5 text-xs shadow-lg shadow-indigo-600/20 border border-indigo-400/30"
+          >
             <Send className="w-4 h-4" /> Send
           </button>
         </form>
@@ -146,7 +181,7 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        {user.role === 'AGENT' ? (
+        {user?.role === 'AGENT' ? (
           <div className="space-y-3.5 pt-2 border-t border-slate-800">
             <h4 className="font-bold text-[10px] uppercase tracking-wider text-slate-400">Human Override Controls</h4>
             <div>

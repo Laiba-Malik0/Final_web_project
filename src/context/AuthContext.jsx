@@ -3,7 +3,7 @@ import { createContext, useState } from 'react';
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext();
 
-export default function AuthProvider({ children }) {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('user');
@@ -38,3 +38,5 @@ export default function AuthProvider({ children }) {
     </AuthContext.Provider>
   );
 }
+
+export default AuthProvider;

@@ -20,7 +20,6 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
       try {
         const parsed = JSON.parse(storedUser);
         if (parsed.name) return parsed.name;
-      // eslint-disable-next-line no-unused-vars
       } catch (e) { /* empty */ }
     }
     return localStorage.getItem('userName') || 'Customer';
@@ -36,7 +35,7 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
     category: 'Plumbing Fix',
     priority: 'Normal',
     date: new Date().toISOString().split('T')[0],
-    assignedWorker: '',
+    assignedWorker: '', // Ab ye Worker ID hold karega
     description: ''
   });
 
@@ -152,7 +151,9 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
         >
           <option value="">-- Auto Assign / Any Available --</option>
           {workersList.map((w) => (
-            <option key={w._id || w.id} value={w.name}>{w.name} ({w.specialization || 'Worker'})</option>
+            <option key={w._id || w.id} value={w._id || w.id}>
+              {w.name} ({w.specialization || 'Worker'})
+            </option>
           ))}
         </select>
       </div>
