@@ -7,7 +7,7 @@ import {
   ClipboardList, Filter, Lock, Wrench
 } from 'lucide-react';
 
-import API from '../api'; // FIXED: Unified API import
+import API from '../api';
 
 const ALL_CATEGORIES = [
   'All Categories',
@@ -21,7 +21,7 @@ const ALL_CATEGORIES = [
 const SidebarContent = ({ currentUser, activeTab, setActiveTab, setSidebarOpen, ticketCount, handleLogout }) => (
   <div className="h-full flex flex-col justify-between">
     <div>
-      <div className="flex items-center gap-2.5 mb-6">
+      <div className="flex items-center gap-2 mb-6">
         <div className="bg-amber-500 p-2 rounded-xl flex shadow-[0_0_12px_rgba(245,158,11,0.4)]">
           <HardHat size={20} className="text-[#0d131a]" />
         </div>
@@ -34,8 +34,8 @@ const SidebarContent = ({ currentUser, activeTab, setActiveTab, setSidebarOpen, 
       </div>
 
       <div className="bg-[#131c26] p-3 rounded-xl border border-[#223142] mb-5">
-        <div className="flex items-center gap-2.5 mb-2">
-          <div className="bg-amber-500 w-8.5 h-8.5 rounded-lg flex items-center justify-center font-extrabold text-[#0d131a] text-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="bg-amber-500 w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-[#0d131a] text-sm">
             {currentUser?.name ? currentUser.name[0].toUpperCase() : 'W'}
           </div>
           <div>
@@ -46,8 +46,8 @@ const SidebarContent = ({ currentUser, activeTab, setActiveTab, setSidebarOpen, 
           </div>
         </div>
         <div className="text-[10px] text-slate-400 border-t border-[#1e2d3d] pt-2 flex flex-col gap-1">
-          <span className="flex items-center gap-1.2"><Mail size={11} className="text-amber-500" /> {currentUser?.email || 'worker@sphere.com'}</span>
-          <span className="flex items-center gap-1.2"><Wrench size={11} className="text-amber-500" /> Active Status: Ready</span>
+          <span className="flex items-center gap-1"><Mail size={11} className="text-amber-500" /> {currentUser?.email || 'worker@sphere.com'}</span>
+          <span className="flex items-center gap-1"><Wrench size={11} className="text-amber-500" /> Active Status: Ready</span>
         </div>
       </div>
 
@@ -68,7 +68,7 @@ const SidebarContent = ({ currentUser, activeTab, setActiveTab, setSidebarOpen, 
                   : 'bg-transparent text-slate-400 hover:text-white hover:bg-[#131c26]'
               }`}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <Icon size={16} className={isActive ? 'text-[#0d131a]' : 'text-slate-400'} /> {item.label}
               </div>
               <ChevronRight size={14} className={isActive ? 'text-[#0d131a]' : 'text-slate-400'} />
@@ -127,29 +127,8 @@ export default function WorkerDashboard({ user }) {
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    
-    const loadTickets = async () => {
-      try {
-        const res = await API.get('/tickets/my-assigned');
-        if (isMounted) {
-          const rawTickets = Array.isArray(res.data) ? res.data : (res.data?.tickets || []);
-          setTickets(rawTickets);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Fetch Assigned Tickets Error:', err);
-          setTickets([]);
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    loadTickets();
-
-    return () => { isMounted = false; };
-  }, []);
+    fetchWorkerTickets();
+  }, [fetchWorkerTickets]);
 
   useEffect(() => {
     if (activeTab === 'complaints' && cardsContainerRef.current && !loading) {
@@ -299,7 +278,7 @@ export default function WorkerDashboard({ user }) {
             {activeTab === 'dashboard' && (
               <motion.div key="welcome" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                 <div className="bg-gradient-to-br from-[#131c26] to-[#090d12] border border-[#223142] border-l-4 border-l-amber-500 rounded-xl p-6 mb-5">
-                  <div className="flex items-center gap-3.5">
+                  <div className="flex items-center gap-3">
                     <div className="bg-amber-500 p-2.5 rounded-xl flex shadow-[0_0_15px_rgba(245,158,11,0.3)]">
                       <HardHat size={24} className="text-[#0d131a]" />
                     </div>
@@ -335,7 +314,7 @@ export default function WorkerDashboard({ user }) {
                   })}
                 </div>
 
-                <div className="bg-[#131c26] border border-[#223142] p-4.5 rounded-xl flex justify-between items-center flex-wrap gap-3">
+                <div className="bg-[#131c26] border border-[#223142] p-4 rounded-xl flex justify-between items-center flex-wrap gap-3">
                   <div>
                     <h3 className="m-0 text-white text-sm font-extrabold">Field Tasks Queue</h3>
                     <p className="m-0 text-slate-400 text-xs mt-0.5">Inspect and process active field complaints instantly.</p>
@@ -355,7 +334,7 @@ export default function WorkerDashboard({ user }) {
             {activeTab === 'complaints' && (
               <motion.div key="complaints" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
 
-                <div className="flex justify-between items-start mb-4.5 flex-wrap gap-3">
+                <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
                   <div>
                     <h1 className="text-white m-0 text-xl lg:text-2xl font-extrabold">
                       Assigned Complaint Queue
@@ -374,7 +353,7 @@ export default function WorkerDashboard({ user }) {
                   </button>
                 </div>
 
-                <div className="bg-[#131c26] border border-[#223142] p-3 px-4 rounded-lg mb-4.5 flex items-center gap-4 flex-wrap">
+                <div className="bg-[#131c26] border border-[#223142] p-3 px-4 rounded-lg mb-4 flex items-center gap-4 flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <Filter size={14} className="text-amber-500" />
                     <span className="text-xs font-bold text-white">Filter By:</span>
@@ -440,8 +419,8 @@ export default function WorkerDashboard({ user }) {
                           key={ticket._id}
                           className="bg-gradient-to-br from-[#131c26] to-[#0f1722] border border-[#223142] border-l-4 border-l-amber-500 rounded-xl p-4 lg:p-5 transition-transform hover:-translate-y-0.5 hover:border-amber-500"
                         >
-                          <div className="flex justify-between items-center flex-wrap gap-2.5 mb-2.5">
-                            <div className="flex items-center gap-2.5 flex-wrap">
+                          <div className="flex justify-between items-center flex-wrap gap-2 mb-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <h2 className="m-0 text-white text-base font-bold">
                                 {ticket.title}
                               </h2>
@@ -467,12 +446,12 @@ export default function WorkerDashboard({ user }) {
                           </p>
 
                           <div className="flex justify-between items-center flex-wrap gap-3 pt-2.5 border-t border-white/5">
-                            <span className="flex items-center gap-1.2 text-xs text-slate-400">
+                            <span className="flex items-center gap-1 text-xs text-slate-400">
                               <User size={13} className="text-amber-500" /> <strong className="text-slate-100">Customer:</strong> {ticket.userName || 'Customer'}
                             </span>
 
                             {isLocked ? (
-                              <div className="flex items-center gap-1.2 text-xs text-slate-400 bg-[#0d131a] px-3 py-1 rounded-md border border-[#223142]">
+                              <div className="flex items-center gap-1 text-xs text-slate-400 bg-[#0d131a] px-3 py-1 rounded-md border border-[#223142]">
                                 <Lock size={12} className="text-red-400" /> Action Locked ({ticket.status})
                               </div>
                             ) : (
@@ -482,7 +461,7 @@ export default function WorkerDashboard({ user }) {
                                   whileTap={{ scale: 0.98 }}
                                   onClick={() => handleStatusChange(ticket._id, 'Approved')}
                                   disabled={updatingId === ticket._id}
-                                  className="flex-1 py-1.5 px-3 rounded-md border-none font-extrabold text-xs cursor-pointer bg-green-500 text-[#0d131a] flex items-center justify-center gap-1.2 disabled:opacity-50"
+                                  className="flex-1 py-1.5 px-3 rounded-md border-none font-extrabold text-xs cursor-pointer bg-green-500 text-[#0d131a] flex items-center justify-center gap-1 disabled:opacity-50"
                                 >
                                   <CheckCircle size={13} /> {updatingId === ticket._id ? '...' : 'Approve'}
                                 </motion.button>
@@ -492,7 +471,7 @@ export default function WorkerDashboard({ user }) {
                                   whileTap={{ scale: 0.98 }}
                                   onClick={() => handleStatusChange(ticket._id, 'Rejected')}
                                   disabled={updatingId === ticket._id}
-                                  className="flex-1 py-1.5 px-3 rounded-md border border-red-500/40 font-extrabold text-xs cursor-pointer bg-red-500/10 text-red-400 flex items-center justify-center gap-1.2 disabled:opacity-50"
+                                  className="flex-1 py-1.5 px-3 rounded-md border border-red-500/40 font-extrabold text-xs cursor-pointer bg-red-500/10 text-red-400 flex items-center justify-center gap-1 disabled:opacity-50"
                                 >
                                   <XCircle size={13} /> {updatingId === ticket._id ? '...' : 'Reject'}
                                 </motion.button>

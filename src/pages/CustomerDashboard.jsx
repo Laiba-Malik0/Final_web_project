@@ -1,119 +1,190 @@
-import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
-import { 
-  LayoutDashboard, FileText, LogOut, Menu, X, PlusCircle, Search, Edit2, 
-  Trash2, Sparkles, Calendar, HardHat, CheckCircle, 
-  XCircle, Clock, ChevronRight, User
+import {
+  LifeBuoy, CheckCircle, XCircle, Clock, RefreshCw, Mail,
+  AlertCircle, LogOut, ChevronRight, Menu, X, LayoutDashboard,
+  ClipboardList, PlusCircle, Filter, Send, Tag, ShieldAlert
 } from 'lucide-react';
 
-import CreateTicket from './CreateTicket';
+import API from '../api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://final-web-backend-eta.vercel.app/api';
-const API = axios.create({ baseURL: API_BASE_URL });
+const CATEGORIES = [
+  'IT / Technical',
+  'General Support',
+  'Plumbing',
+  'Electrical',
+  'Carpentry / Maintenance'
+];
 
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+const SidebarContent = ({ currentUser, activeTab, setActiveTab, setSidebarOpen, ticketCount, handleLogout }) => (
+  <div className="h-full flex flex-col justify-between">
+    <div>
+      <div className="flex items-center gap-2 mb-6">
+        <div className="bg-sky-500 p-2 rounded-xl flex shadow-[0_0_12px_rgba(14,165,233,0.4)]">
+          <LifeBuoy size={20} className="text-[#0d131a]" />
+        </div>
+        <div>
+          <h2 className="font-extrabold text-base text-white tracking-wide m-0">
+            Support<span className="text-sky-400">Sphere</span>
+          </h2>
+          <span className="text-[9px] text-sky-400 tracking-wider uppercase font-extrabold block">Customer Portal</span>
+        </div>
+      </div>
 
-const cardVariant = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } },
-  exit: { opacity: 0, y: -10, transition: { duration: 0.2 } }
-};
+      <div className="bg-[#131c26] p-3 rounded-xl border border-[#223142] mb-5">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="bg-sky-500 w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-[#0d131a] text-sm">
+            {currentUser?.name ? currentUser.name[0].toUpperCase() : 'C'}
+          </div>
+          <div>
+            <p className="m-0 font-bold text-slate-100 text-xs">{currentUser?.name || 'Customer'}</p>
+            <span className="text-[10px] text-sky-400 font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shadow-[0_0_8px_#38bdf8]"></span> Account Verified
+            </span>
+          </div>
+        </div>
+        <div className="text-[10px] text-slate-400 border-t border-[#1e2d3d] pt-2 flex items-center gap-1">
+          <Mail size={11} className="text-sky-400" /> {currentUser?.email || 'user@sphere.com'}
+        </div>
+      </div>
+
+      <nav className="flex flex-col gap-1.5">
+        {[
+          { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+          { id: 'new-ticket', label: 'Lodge Complaint', icon: PlusCircle },
+          { id: 'my-tickets', label: `My Tickets (${ticketCount})`, icon: ClipboardList }
+        ].map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+              className={`flex items-center justify-between p-2.5 rounded-lg border-none font-extrabold text-xs cursor-pointer transition-all ${
+                isActive
+                  ? 'bg-sky-500 text-[#0d131a] shadow-[0_4px_12px_rgba(14,165,233,0.3)]'
+                  : 'bg-transparent text-slate-400 hover:text-white hover:bg-[#131c26]'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon size={16} className={isActive ? 'text-[#0d131a]' : 'text-slate-400'} /> {item.label}
+              </div>
+              <ChevronRight size={14} className={isActive ? 'text-[#0d131a]' : 'text-slate-400'} />
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={handleLogout}
+      className="flex items-center justify-center gap-2 p-2.5 rounded-lg border-none bg-red-500 text-white cursor-pointer font-bold text-xs shadow-[0_4px_12px_rgba(239,68,68,0.3)] mt-4"
+    >
+      <LogOut size={14} /> Log Out
+    </motion.button>
+  </div>
+);
 
 export default function CustomerDashboard({ user }) {
-  const getUserName = () => {
-    if (user && user.name) return user.name;
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        if (parsed.name) return parsed.name;
-      } catch (e) {
-        // Fallback catch
-      }
+  const storedUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch {
+      return null;
     }
-    return localStorage.getItem('userName') || 'Customer';
-  };
+  }, []);
 
-  const currentUserName = getUserName();
+  const currentUser = user || storedUser || { name: 'Customer', email: 'user@sphere.com' };
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('complaints');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingTicketId, setEditingTicketId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // New Ticket Form State
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [priority, setPriority] = useState('Normal');
+  const [description, setDescription] = useState('');
+  const [formMessage, setFormMessage] = useState(null);
+
+  // Filters State
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
 
   const cardsContainerRef = useRef(null);
 
-  const [formData, setFormData] = useState(() => ({
-    userName: currentUserName,
-    title: '',
-    category: 'Plumbing Fix',
-    priority: 'Normal',
-    date: new Date().toISOString().split('T')[0],
-    assignedWorker: '',
-    description: ''
-  }));
-
-  const fetchData = async (isBackground = false) => {
-    if (!isBackground) setLoading(true);
-    else setIsSyncing(true);
-
+  const fetchMyTickets = useCallback(async () => {
+    setLoading(true);
     try {
-      const ticketsRes = await API.get('/tickets/customer-tickets').catch(() => ({ data: [] }));
-      const rawTickets = ticketsRes.data?.tickets || ticketsRes.data || [];
-      setTickets(Array.isArray(rawTickets) ? rawTickets : []);
+      const res = await API.get('/tickets/my-tickets');
+      const rawTickets = Array.isArray(res.data) ? res.data : (res.data?.tickets || []);
+      setTickets(rawTickets);
     } catch (err) {
-      console.error('API Fetch Error:', err);
+      console.error('Fetch Customer Tickets Error:', err);
+      setTickets([]);
     } finally {
-      if (!isBackground) setLoading(false);
-      else setIsSyncing(false);
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData(false);
-
-    const intervalId = setInterval(() => {
-      fetchData(true);
-    }, 5000);
-
-    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'complaints' && cardsContainerRef.current && tickets.length > 0 && !loading && !isSyncing) {
-      gsap.fromTo(
-        cardsContainerRef.current.children,
-        { opacity: 0, y: 15 },
-        { opacity: 1, y: 0, duration: 0.35, stagger: 0.06, ease: 'power2.out', clearProps: 'transform' }
-      );
+    fetchMyTickets();
+  }, [fetchMyTickets]);
+
+  useEffect(() => {
+    if (activeTab === 'my-tickets' && cardsContainerRef.current && !loading) {
+      const ctx = gsap.context(() => {
+        const children = cardsContainerRef.current?.children;
+        if (children && children.length > 0) {
+          gsap.fromTo(children,
+            { opacity: 0, y: 12 },
+            { opacity: 1, y: 0, duration: 0.35, stagger: 0.08, ease: 'power2.out', clearProps: 'all' }
+          );
+        }
+      }, cardsContainerRef);
+
+      return () => ctx.revert();
     }
-  }, [activeTab, loading, isSyncing, tickets.length]);
+  }, [activeTab, loading, statusFilter, priorityFilter]);
 
-  const resetForm = () => setFormData({
-    userName: currentUserName,
-    title: '',
-    category: 'Plumbing Fix',
-    priority: 'Normal',
-    date: new Date().toISOString().split('T')[0],
-    assignedWorker: '',
-    description: ''
-  });
+  const handleCreateTicket = async (e) => {
+    e.preventDefault();
+    if (!title.trim() || !description.trim()) {
+      setFormMessage({ type: 'error', text: 'Please fill in all required fields.' });
+      return;
+    }
 
-  const closeModal = () => {
-    setIsCreateModalOpen(false);
-    setIsEditModalOpen(false);
-    setEditingTicketId(null);
-    resetForm();
+    setSubmitting(true);
+    setFormMessage(null);
+
+    try {
+      await API.post('/tickets/create', {
+        title,
+        category,
+        priority,
+        description,
+        userName: currentUser.name,
+        userEmail: currentUser.email
+      });
+
+      setTitle('');
+      setDescription('');
+      setCategory(CATEGORIES[0]);
+      setPriority('Normal');
+      setFormMessage({ type: 'success', text: 'Complaint lodged successfully!' });
+      fetchMyTickets();
+      setTimeout(() => setActiveTab('my-tickets'), 1200);
+    } catch (err) {
+      console.error('Create Ticket Error:', err);
+      setFormMessage({ type: 'error', text: 'Failed to submit complaint. Please try again.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleLogout = () => {
@@ -121,264 +192,344 @@ export default function CustomerDashboard({ user }) {
     window.location.href = '/login';
   };
 
-  const handleTicketCreated = (newTicket) => {
-    if (newTicket) {
-      setTickets([newTicket, ...tickets]);
-    } else {
-      fetchData(false);
-    }
-    closeModal();
-  };
+  const filteredTickets = tickets.filter((t) => {
+    const s = (t.status || 'Pending').toLowerCase();
+    const p = (t.priority || 'Normal').toLowerCase();
 
-  const handleOpenEdit = (ticket) => {
-    setEditingTicketId(ticket._id);
-    setFormData({
-      userName: currentUserName,
-      title: ticket.title || '',
-      category: ticket.category || 'Plumbing Fix',
-      priority: ticket.priority || 'Normal',
-      date: ticket.date ? ticket.date.split('T')[0] : (ticket.createdAt ? ticket.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
-      assignedWorker: ticket.assignedWorker || '',
-      description: ticket.description || ''
-    });
-    setIsEditModalOpen(true);
-  };
+    if (statusFilter === 'pending' && s !== 'pending') return false;
+    if (statusFilter === 'approved' && !['approved', 'in progress', 'resolved'].includes(s)) return false;
+    if (statusFilter === 'rejected' && !['rejected', 'reject', 'closed'].includes(s)) return false;
 
-  const handleUpdateTicket = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await API.put(`/tickets/update/${editingTicketId}`, formData);
-      setTickets(tickets.map(t => t._id === editingTicketId ? (res.data.ticket || { ...t, ...formData }) : t));
-    } catch (err) {
-      setTickets(tickets.map(t => t._id === editingTicketId ? { ...t, ...formData } : t));
-    } finally {
-      closeModal();
-    }
-  };
+    if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
 
-  const handleDeleteTicket = async (id) => {
-    if (!window.confirm('Delete this complaint permanently?')) return;
-    try {
-      await API.delete(`/tickets/delete/${id}`);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setTickets(tickets.filter(t => t._id !== id));
-    }
-  };
+    return true;
+  });
 
-  const formatDate = (rawDate, rawCreatedAt) => {
-    const val = rawDate || rawCreatedAt;
-    if (!val) return 'N/A';
-    const parsed = new Date(val);
-    return isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  const pendingCount = tickets.filter(t => (t.status || 'Pending').toLowerCase() === 'pending').length;
+  const resolvedCount = tickets.filter(t => ['approved', 'in progress', 'resolved'].includes((t.status || '').toLowerCase())).length;
 
   const renderStatusBadge = (status = 'Pending') => {
-    const s = String(status).toLowerCase().trim();
-    
+    const s = status.toLowerCase();
     const isApproved = ['approved', 'in progress', 'resolved'].includes(s);
     const isRejected = ['rejected', 'reject', 'closed'].includes(s);
 
     const config = isApproved
-      ? { bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: CheckCircle, label: status }
+      ? { bg: 'bg-green-500/10 text-green-400 border-green-500/30', Icon: CheckCircle, dot: 'bg-green-400 shadow-[0_0_8px_#4ade80]', text: 'In Progress / Resolved' }
       : isRejected
-        ? { bg: 'bg-rose-500/10 text-rose-400 border-rose-500/20', icon: XCircle, label: status }
-        : { bg: 'bg-amber-500/10 text-amber-400 border-amber-500/20', icon: Clock, label: 'Pending' };
+        ? { bg: 'bg-red-500/10 text-red-400 border-red-500/30', Icon: XCircle, dot: 'bg-red-400 shadow-[0_0_8px_#f87171]', text: 'Rejected / Closed' }
+        : { bg: 'bg-sky-500/15 text-sky-400 border-sky-500/40', Icon: Clock, dot: 'bg-sky-400 shadow-[0_0_8px_#38bdf8]', text: 'Pending Approval' };
 
-    const Icon = config.icon;
+    const { bg, Icon, dot, text } = config;
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-md ${config.bg}`}>
-        <Icon size={14} /> <span className="capitalize">{config.label}</span>
+      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 border ${bg}`}>
+        <span className={`w-2 h-2 rounded-full animate-pulse ${dot}`}></span>
+        <Icon size={13} /> {text}
       </span>
     );
   };
 
+  const sidebarProps = {
+    currentUser,
+    activeTab,
+    setActiveTab,
+    setSidebarOpen,
+    ticketCount: tickets.length,
+    handleLogout
+  };
+
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-72 bg-slate-900/90 backdrop-blur-xl border-r border-slate-800 flex-col justify-between p-6 sticky top-0 h-screen z-30">
-        <div>
-          <div className="flex items-center gap-3.5 mb-8 px-2">
-            <div className="bg-gradient-to-tr from-sky-400 to-blue-600 p-2.5 rounded-2xl shadow-lg shadow-sky-500/20">
-              <Search size={22} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-white tracking-wide m-0">SUPPORT<span className="text-sky-400">SPHERE</span></h2>
-              <span className="text-[10px] text-sky-400/90 uppercase font-extrabold tracking-widest block mt-0.5">Customer Portal</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-800/60 backdrop-blur-md p-4 rounded-2xl flex items-center gap-3 mb-8 border border-slate-700/50 shadow-sm">
-            <div className="bg-gradient-to-br from-sky-400 to-blue-600 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white text-base shadow-md shadow-sky-500/10">
-              {currentUserName ? currentUserName[0].toUpperCase() : <User size={18} />}
-            </div>
-            <div className="overflow-hidden">
-              <p className="m-0 font-bold text-sm text-white truncate">{currentUserName}</p>
-              <span className="text-[11px] text-sky-400 font-medium flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span> Active User
-              </span>
-            </div>
-          </div>
-
-          <nav className="flex flex-col gap-2">
-            {[
-              { id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, 
-              { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }
-            ].map((tab) => (
-              <button 
-                key={tab.id} 
-                onClick={() => setActiveTab(tab.id)} 
-                className={`flex items-center justify-between px-4 py-3 rounded-xl border font-semibold cursor-pointer text-xs transition-all duration-200 ${
-                  activeTab === tab.id 
-                    ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white border-sky-400/30 shadow-lg shadow-sky-500/25' 
-                    : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-3"><tab.icon size={18} /> {tab.label}</div>
-                {activeTab === tab.id && <ChevronRight size={16} />}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <motion.button 
-          whileHover={{ scale: 1.02 }} 
-          whileTap={{ scale: 0.98 }} 
-          onClick={handleLogout} 
-          className="flex items-center justify-center gap-2 p-3 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white cursor-pointer font-bold text-xs transition-all shadow-sm"
-        >
-          <LogOut size={16} /> Log Out
-        </motion.button>
+    <div className="flex min-h-screen bg-[#0d131a] text-slate-100 font-sans">
+      <aside className="hidden lg:flex w-64 bg-[#090d12] border-r border-[#1a2634] p-4 flex-col">
+        <SidebarContent {...sidebarProps} />
       </aside>
 
-      {/* Mobile Drawer */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-[#090d12] border-b border-[#1a2634] flex items-center justify-between px-4 z-40">
+        <button onClick={() => setSidebarOpen(true)} className="bg-transparent border-none text-white cursor-pointer">
+          <Menu size={22} />
+        </button>
+        <h2 className="text-base font-extrabold text-white m-0">
+          Support<span className="text-sky-400">Sphere</span>
+        </h2>
+        <div className="w-5"></div>
+      </div>
+
       <AnimatePresence>
-        {isMobileMenuOpen && (
+        {sidebarOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[998] lg:hidden" />
-            <motion.aside initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25, stiffness: 220 }} className="fixed top-0 left-0 bottom-0 w-[280px] z-[999] bg-slate-900 p-6 flex flex-col justify-between border-r border-slate-800 lg:hidden shadow-2xl">
-              <div>
-                <div className="flex justify-between items-center mb-8">
-                  <h2 className="text-lg font-black text-white m-0">SUPPORT<span className="text-sky-400">SPHERE</span></h2>
-                  <button onClick={() => setIsMobileMenuOpen(false)} className="bg-slate-800 border border-slate-700 text-slate-400 hover:text-white p-2 rounded-xl cursor-pointer"><X size={18} /></button>
-                </div>
-
-                <nav className="flex flex-col gap-2">
-                  {[
-                    { id: 'dashboard', label: 'Portal Overview', icon: LayoutDashboard }, 
-                    { id: 'complaints', label: `My Complaints (${tickets.length})`, icon: FileText }
-                  ].map((tab) => (
-                    <button 
-                      key={tab.id} 
-                      onClick={() => { setActiveTab(tab.id); setIsMobileMenuOpen(false); }} 
-                      className={`flex items-center justify-between px-4 py-3 rounded-xl border font-semibold cursor-pointer text-xs ${
-                        activeTab === tab.id ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white border-sky-400/30' : 'bg-transparent border-transparent text-slate-400'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3"><tab.icon size={18} /> {tab.label}</div>
-                    </button>
-                  ))}
-                </nav>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed top-0 left-0 bottom-0 w-64 bg-[#090d12] border-r border-[#1a2634] p-4 z-50"
+            >
+              <div className="flex justify-end mb-2">
+                <button onClick={() => setSidebarOpen(false)} className="bg-transparent border-none text-slate-400 cursor-pointer">
+                  <X size={18} />
+                </button>
               </div>
-
-              <button onClick={handleLogout} className="flex items-center justify-center gap-2 p-3 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white cursor-pointer font-bold text-xs transition-all">
-                <LogOut size={16} /> Log Out
-              </button>
+              <SidebarContent {...sidebarProps} />
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* Main Workspace */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Fixed Mobile Topbar */}
-        <header className="lg:hidden fixed top-0 left-0 right-0 h-16 px-4 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800 flex items-center justify-between z-[90]">
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="bg-slate-800 border border-slate-700 text-white p-2 rounded-xl cursor-pointer">
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-          <span className="font-black text-white text-base tracking-wide">SUPPORT<span className="text-sky-400">SPHERE</span></span>
-          <div className="w-8"></div>
-        </header>
+        <main className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full pt-16 lg:pt-7 px-4 lg:px-8 pb-6">
 
-        <main className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full pt-20 lg:pt-10 px-4 sm:px-8 pb-10">
           <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' ? (
-              <motion.div key="tab-dash" variants={cardVariant} initial="hidden" animate="visible" exit="exit" className="flex flex-col gap-6">
-                <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl">
-                  <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
-                  <div className="inline-flex items-center gap-2 bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3.5 py-1.5 rounded-full text-xs font-bold mb-4">
-                    <Sparkles size={14} /> SUPPORT SPHERE SYSTEM
+            {activeTab === 'dashboard' && (
+              <motion.div key="welcome" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <div className="bg-gradient-to-br from-[#131c26] to-[#090d12] border border-[#223142] border-l-4 border-l-sky-500 rounded-xl p-6 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-sky-500 p-2.5 rounded-xl flex shadow-[0_0_15px_rgba(14,165,233,0.3)]">
+                      <LifeBuoy size={24} className="text-[#0d131a]" />
+                    </div>
+                    <div>
+                      <h1 className="m-0 text-xl lg:text-2xl font-extrabold text-white">
+                        Hello, <span className="text-sky-400">{currentUser?.name || 'Customer'}</span>!
+                      </h1>
+                      <p className="m-0 text-slate-400 text-xs mt-1">
+                        Customer Helpdesk • Lodge complaints and track technical resolution status in real-time.
+                      </p>
+                    </div>
                   </div>
-                  <h1 className="text-2xl sm:text-4xl m-0 mb-3 text-white font-black tracking-tight">
-                    Welcome back, <span className="bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">{currentUserName}</span>
-                  </h1>
-                  <p className="text-slate-400 m-0 text-sm max-w-xl leading-relaxed">Lodge tickets and track live updates directly from workers in real time.</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <button onClick={() => setIsCreateModalOpen(true)} className="group relative overflow-hidden bg-gradient-to-br from-sky-500 to-blue-600 border-0 rounded-3xl p-6 text-white text-left cursor-pointer transition-all duration-300 shadow-xl shadow-sky-500/20 hover:shadow-sky-500/30 hover:-translate-y-1">
-                    <PlusCircle size={32} className="mb-4 text-white group-hover:scale-110 transition-transform duration-300" />
-                    <h3 className="m-0 mb-1 text-lg font-bold">File New Complaint</h3>
-                    <p className="m-0 text-xs text-sky-100/80">Request maintenance or fix</p>
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-6">
+                  {[
+                    { title: 'Total Lodged', count: tickets.length, color: 'text-white', Icon: ClipboardList, iconColor: 'text-sky-400', topBorder: 'border-t-sky-500' },
+                    { title: 'In Progress / Pending', count: pendingCount, color: 'text-sky-400', Icon: Clock, iconColor: 'text-sky-400', topBorder: 'border-t-sky-500' },
+                    { title: 'Resolved Tasks', count: resolvedCount, color: 'text-green-400', Icon: CheckCircle, iconColor: 'text-green-400', topBorder: 'border-t-green-400' }
+                  ].map((stat, i) => {
+                    const StatIcon = stat.Icon;
+                    return (
+                      <div key={i} className={`bg-[#131c26] border border-[#223142] p-4 rounded-xl border-t-2 ${stat.topBorder}`}>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-slate-400 font-semibold">{stat.title}</span>
+                          <StatIcon size={16} className={stat.iconColor} />
+                        </div>
+                        <p className={`text-2xl font-extrabold m-0 mt-2 ${stat.color}`}>
+                          {stat.count}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                  <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-3xl p-6 flex flex-col justify-center">
-                    <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total Complaints</span>
-                    <h2 className="text-4xl font-black mt-2 m-0 text-white">{tickets.length}</h2>
+                <div className="bg-[#131c26] border border-[#223142] p-4 rounded-xl flex justify-between items-center flex-wrap gap-3">
+                  <div>
+                    <h3 className="m-0 text-white text-sm font-extrabold">Need Help with Something?</h3>
+                    <p className="m-0 text-slate-400 text-xs mt-0.5">Submit a new complaint ticket to get assigned to our field technicians.</p>
                   </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setActiveTab('new-ticket')}
+                    className="bg-sky-500 text-[#0d131a] border-none px-4 py-2 rounded-lg font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shadow-[0_4px_12px_rgba(14,165,233,0.3)]"
+                  >
+                    <PlusCircle size={15} /> Lodge Complaint
+                  </motion.button>
                 </div>
               </motion.div>
-            ) : (
-              <motion.div key="tab-complaints" variants={cardVariant} initial="hidden" animate="visible" exit="exit" className="flex flex-col gap-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl sm:text-3xl m-0 font-black text-white tracking-tight">My Complaints</h1>
-                    <p className="m-0 text-xs sm:text-sm text-slate-400 mt-1">View and track all your support requests</p>
+            )}
+
+            {activeTab === 'new-ticket' && (
+              <motion.div key="new-ticket" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <div className="mb-4">
+                  <h1 className="text-white m-0 text-xl lg:text-2xl font-extrabold">
+                    Lodge New Complaint
+                  </h1>
+                  <p className="text-slate-400 text-xs m-0 mt-1">
+                    Describe your issue in detail so our technical team can address it promptly.
+                  </p>
+                </div>
+
+                {formMessage && (
+                  <div className={`p-3 rounded-lg text-xs font-bold mb-4 border ${
+                    formMessage.type === 'error'
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : 'bg-green-500/10 border-green-500/30 text-green-400'
+                  }`}>
+                    {formMessage.text}
                   </div>
-                  <button onClick={() => setIsCreateModalOpen(true)} className="bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-500 hover:to-blue-600 text-slate-950 border-0 rounded-xl px-5 py-3 font-bold text-xs cursor-pointer flex items-center justify-center gap-2 transition-all shadow-lg shadow-sky-500/20">
-                    <PlusCircle size={18} /> New Complaint
+                )}
+
+                <form onSubmit={handleCreateTicket} className="bg-[#131c26] border border-[#223142] rounded-xl p-5 flex flex-col gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">Issue Subject / Title *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Water Leakage in Main Restroom"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required
+                      className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
+                        <Tag size={12} className="text-sky-400" /> Category
+                      </label>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors cursor-pointer"
+                      >
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
+                        <ShieldAlert size={12} className="text-sky-400" /> Priority Level
+                      </label>
+                      <select
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value)}
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors cursor-pointer"
+                      >
+                        <option value="Normal">Normal Priority</option>
+                        <option value="High">High Priority</option>
+                        <option value="Emergency">Emergency</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">Detailed Explanation *</label>
+                    <textarea
+                      rows={4}
+                      placeholder="Provide specific details about the issue, location, or equipment involved..."
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      required
+                      className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors resize-y"
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      type="submit"
+                      disabled={submitting}
+                      className="bg-sky-500 text-[#0d131a] border-none px-5 py-2.5 rounded-lg font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shadow-[0_4px_12px_rgba(14,165,233,0.3)] disabled:opacity-50"
+                    >
+                      <Send size={14} /> {submitting ? 'Submitting...' : 'Submit Complaint'}
+                    </motion.button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+
+            {activeTab === 'my-tickets' && (
+              <motion.div key="my-tickets" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
+                  <div>
+                    <h1 className="text-white m-0 text-xl lg:text-2xl font-extrabold">
+                      My Submitted Tickets
+                    </h1>
+                    <p className="text-slate-400 text-xs m-0 mt-1">
+                      Monitor progress and track resolution status in real-time.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={fetchMyTickets}
+                    disabled={loading}
+                    className="bg-[#131c26] border border-[#223142] text-sky-400 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-bold hover:bg-[#1a2634] transition-colors"
+                  >
+                    <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh List
                   </button>
+                </div>
+
+                <div className="bg-[#131c26] border border-[#223142] p-3 px-4 rounded-lg mb-4 flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Filter size={14} className="text-sky-400" />
+                    <span className="text-xs font-bold text-white">Filter By:</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-slate-400">Status:</label>
+                    <select
+                      className="bg-[#0d131a] text-slate-100 border border-[#223142] px-3 py-1 rounded-md text-xs font-semibold outline-none cursor-pointer focus:border-sky-500"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option value="all">All Status</option>
+                      <option value="pending">Pending Approval</option>
+                      <option value="approved">Approved / Resolved</option>
+                      <option value="rejected">Rejected / Closed</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-slate-400">Priority:</label>
+                    <select
+                      className="bg-[#0d131a] text-slate-100 border border-[#223142] px-3 py-1 rounded-md text-xs font-semibold outline-none cursor-pointer focus:border-sky-500"
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                    >
+                      <option value="all">All Priorities</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="emergency">Emergency</option>
+                    </select>
+                  </div>
                 </div>
 
                 {loading ? (
-                  <div className="p-12 text-center text-slate-400 text-sm bg-slate-900/40 rounded-3xl border border-slate-800/80">Loading tickets...</div>
-                ) : tickets.length === 0 ? (
-                  <div className="p-12 text-center bg-slate-900/40 rounded-3xl border border-slate-800/80">
-                    <p className="m-0 text-slate-400 text-sm">No complaints found. Click "New Complaint" to get started.</p>
+                  <p className="text-slate-400 text-xs">Fetching your complaints...</p>
+                ) : filteredTickets.length === 0 ? (
+                  <div className="bg-[#131c26] border border-dashed border-[#223142] rounded-xl p-10 text-center text-slate-400">
+                    <AlertCircle size={32} className="mx-auto mb-2 opacity-40" />
+                    <p className="m-0 text-xs">No submitted tickets found matching your selected filters.</p>
                   </div>
                 ) : (
-                  <div ref={cardsContainerRef} className="grid grid-cols-1 gap-4">
-                    {tickets.map((ticket, index) => (
-                      <div key={ticket._id || index} className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 hover:border-slate-700 rounded-2xl p-6 transition-all duration-300 hover:shadow-2xl">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                          <div>
-                            <h3 className="m-0 mb-1 text-base sm:text-lg text-white font-bold">{ticket.title}</h3>
-                            <span className="text-xs text-sky-400 font-semibold">{ticket.category}</span>
+                  <div ref={cardsContainerRef} className="grid gap-3.5">
+                    {filteredTickets.map((ticket) => (
+                      <div
+                        key={ticket._id}
+                        className="bg-gradient-to-br from-[#131c26] to-[#0f1722] border border-[#223142] border-l-4 border-l-sky-500 rounded-xl p-4 lg:p-5 transition-transform hover:-translate-y-0.5 hover:border-sky-500"
+                      >
+                        <div className="flex justify-between items-center flex-wrap gap-2 mb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="m-0 text-white text-base font-bold">
+                              {ticket.title}
+                            </h2>
+                            <span className="bg-[#0d131a] text-sky-400 text-[10px] px-2.5 py-0.5 rounded-md border border-[#223142] font-bold">
+                              {ticket.category || 'General Support'}
+                            </span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${
+                              ticket.priority === 'Emergency'
+                                ? 'bg-red-500/20 text-red-400'
+                                : ticket.priority === 'High'
+                                  ? 'bg-orange-500/20 text-orange-400'
+                                  : 'bg-slate-500/20 text-slate-300'
+                            }`}>
+                              {ticket.priority || 'Normal'} Priority
+                            </span>
                           </div>
-                          <div className="self-start sm:self-center">
-                            {renderStatusBadge(ticket.status)}
-                          </div>
+
+                          {renderStatusBadge(ticket.status)}
                         </div>
 
-                        <p className="text-xs sm:text-sm text-slate-300 m-0 mb-6 leading-relaxed bg-slate-950/40 p-4 rounded-xl border border-slate-800/40">{ticket.description}</p>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-slate-800/80 text-xs text-slate-400">
-                          <div className="flex flex-wrap gap-4">
-                            <span className="flex items-center gap-1.5"><Calendar size={15} className="text-slate-500" /> {formatDate(ticket.date, ticket.createdAt)}</span>
-                            <span className="flex items-center gap-1.5"><HardHat size={15} className="text-slate-500" /> Worker: <strong className="text-slate-300">{ticket.assignedWorker || 'Unassigned'}</strong></span>
-                          </div>
-
-                          <div className="flex items-center gap-2 self-end sm:self-auto">
-                            <button onClick={() => handleOpenEdit(ticket)} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-400 px-3 py-2 rounded-xl cursor-pointer text-xs flex items-center gap-1.5 font-semibold transition-colors">
-                              <Edit2 size={14} /> Edit
-                            </button>
-                            <button onClick={() => handleDeleteTicket(ticket._id)} className="bg-slate-800 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/30 text-rose-400 px-3 py-2 rounded-xl cursor-pointer text-xs flex items-center gap-1.5 font-semibold transition-colors">
-                              <Trash2 size={14} /> Delete
-                            </button>
-                          </div>
-                        </div>
+                        <p className="m-0 text-slate-300 text-xs leading-relaxed bg-[#0d131a] p-2.5 rounded-lg border border-[#1a2634]">
+                          {ticket.description}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -388,74 +539,6 @@ export default function CustomerDashboard({ user }) {
           </AnimatePresence>
         </main>
       </div>
-
-      {/* CREATE TICKET MODAL */}
-      <AnimatePresence>
-        {isCreateModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 sm:p-8 shadow-2xl">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="m-0 text-xl font-bold text-white">File New Complaint</h2>
-                <button onClick={closeModal} className="bg-slate-800 border border-slate-700 text-slate-400 hover:text-white p-2 rounded-xl cursor-pointer"><X size={18} /></button>
-              </div>
-
-              <CreateTicket user={user} onSuccess={handleTicketCreated} onClose={closeModal} />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* EDIT TICKET MODAL */}
-      <AnimatePresence>
-        {isEditModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 sm:p-8 shadow-2xl">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="m-0 text-xl font-bold text-white">Edit Complaint</h2>
-                <button onClick={closeModal} className="bg-slate-800 border border-slate-700 text-slate-400 hover:text-white p-2 rounded-xl cursor-pointer"><X size={18} /></button>
-              </div>
-
-              <form onSubmit={handleUpdateTicket} className="flex flex-col gap-4">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1.5 font-semibold">Issue Title</label>
-                  <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all" />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1.5 font-semibold">Category</label>
-                    <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all">
-                      <option value="Plumbing Fix">Plumbing Fix</option>
-                      <option value="Electrical Issue">Electrical Issue</option>
-                      <option value="Carpentry">Carpentry</option>
-                      <option value="General Maintenance">General Maintenance</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1.5 font-semibold">Priority</label>
-                    <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all">
-                      <option value="Low">Low</option>
-                      <option value="Normal">Normal</option>
-                      <option value="High">High</option>
-                      <option value="Urgent">Urgent</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1.5 font-semibold">Description</label>
-                  <textarea rows={4} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all resize-none" />
-                </div>
-
-                <div className="flex gap-3 mt-2">
-                  <button type="button" onClick={closeModal} className="flex-1 py-3 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 cursor-pointer font-semibold text-xs hover:bg-slate-700 transition-colors">Cancel</button>
-                  <button type="submit" className="flex-1 py-3 rounded-xl border-0 bg-gradient-to-r from-sky-400 to-blue-500 text-slate-950 cursor-pointer font-bold text-xs hover:from-sky-500 hover:to-blue-600 transition-all shadow-md shadow-sky-500/20">Save Changes</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
