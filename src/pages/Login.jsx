@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ArrowRight, X, Shield, User, Briefcase } from "lucide-react";
 import API from "../api/index";
+import { AuthContext } from "../context/AuthContext";
 
 function Login() {
   const navigate = useNavigate();
+  const { user, login } = useContext(AuthContext); // Context Integration
+
   const [activeRole, setActiveRole] = useState("customer");
   const [isLogin, setIsLogin] = useState(true);
 
@@ -17,6 +20,16 @@ function Login() {
   const [otpStep, setOtpStep] = useState(0);
   const [resetData, setResetData] = useState({ email: "", otp: "", newPassword: "" });
   const [modalMsg, setModalMsg] = useState("");
+
+  // Fix 1: Auto Redirect if User is Already Logged In
+  useEffect(() => {
+    if (user) {
+      const role = user.role?.toLowerCase()?.trim();
+      if (role === "admin") navigate("/admin-dashboard");
+      else if (role === "worker" || role === "agent") navigate("/worker-dashboard");
+      else navigate("/customer-dashboard");
+    }
+  }, [user, navigate]);
 
   const handleRoleSwitch = (role) => {
     setActiveRole(role);
@@ -40,18 +53,22 @@ function Login() {
 
     try {
       if (isLogin) {
+        // Fix 2: Clean Payload Request
         const res = await API.post("/auth/login", { 
           email: cleanEmail, 
           password: cleanPassword,
           role: activeRole 
         });
 
-        localStorage.setItem("token", res.data.token);
-        localStorage.setItem("user", JSON.stringify(res.data.user));
+        const userData = res.data.user || res.data;
+        const userToken = res.data.token;
 
-        const userRole = res.data.user?.role || activeRole;
+        // Context state update
+        login(userData, userToken);
+
+        const userRole = (userData?.role || activeRole).toLowerCase().trim();
         if (userRole === "admin") navigate("/admin-dashboard");
-        else if (userRole === "worker") navigate("/worker-dashboard");
+        else if (userRole === "worker" || userRole === "agent") navigate("/worker-dashboard");
         else navigate("/customer-dashboard");
       } else {
         await API.post("/auth/register", {
@@ -66,8 +83,9 @@ function Login() {
         setFormData({ name: "", email: cleanEmail, password: "" });
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Authentication failed.");
-    } finally {
+      console.error("Auth error:", err.response);
+      setError(err.response?.data?.message || err.response?.data?.error || "Authentication failed.");
+    } font-medium; {
       setLoading(false);
     }
   };
