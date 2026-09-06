@@ -48,7 +48,7 @@ export default function AdminDashboard({ user }) {
   const cardsContainerRef = useRef(null);
   const workersContainerRef = useRef(null);
 
-  // FIXED: Clean useCallback pattern without cascading renders
+  // Data Fetching
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
     try {
@@ -82,40 +82,46 @@ export default function AdminDashboard({ user }) {
     }
   }, []);
 
-  // FIXED: Triggered cleanly with correct dependency array
   useEffect(() => {
     fetchAdminData();
   }, [fetchAdminData]);
 
-  // GSAP Animations
+  // GSAP Animations with RequestAnimationFrame context safeguard
   useEffect(() => {
-    let ctx = gsap.context(() => {
-      if (activeTab === 'complaints' && cardsContainerRef.current && !loading) {
-        const children = cardsContainerRef.current.children;
-        if (children.length > 0) {
-          gsap.fromTo(
-            children,
-            { opacity: 0, y: 20 },
-            { opacity: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'power2.out', clearProps: 'all' }
-          );
+    let ctx;
+    const animFrame = requestAnimationFrame(() => {
+      ctx = gsap.context(() => {
+        if (activeTab === 'complaints' && cardsContainerRef.current && !loading) {
+          const children = cardsContainerRef.current.children;
+          if (children.length > 0) {
+            gsap.fromTo(
+              children,
+              { opacity: 0, y: 20 },
+              { opacity: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'power2.out', clearProps: 'all' }
+            );
+          }
         }
-      }
 
-      if (activeTab === 'workers' && workersContainerRef.current && !loading) {
-        const children = workersContainerRef.current.children;
-        if (children.length > 0) {
-          gsap.fromTo(
-            children,
-            { opacity: 0, scale: 0.96, y: 15 },
-            { opacity: 1, scale: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'back.out(1.1)', clearProps: 'all' }
-          );
+        if (activeTab === 'workers' && workersContainerRef.current && !loading) {
+          const children = workersContainerRef.current.children;
+          if (children.length > 0) {
+            gsap.fromTo(
+              children,
+              { opacity: 0, scale: 0.96, y: 15 },
+              { opacity: 1, scale: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'back.out(1.1)', clearProps: 'all' }
+            );
+          }
         }
-      }
+      });
     });
 
-    return () => ctx.revert();
+    return () => {
+      cancelAnimationFrame(animFrame);
+      if (ctx) ctx.revert();
+    };
   }, [activeTab, loading, statusFilter, priorityFilter, categoryFilter, searchQuery]);
 
+  // Action Handlers
   const handleStatusUpdate = async (ticketId, newStatus) => {
     setUpdatingId(ticketId);
     const previousTickets = [...tickets];
@@ -137,7 +143,7 @@ export default function AdminDashboard({ user }) {
 
   const handleWorkerAssign = async (ticketId, workerId) => {
     setUpdatingId(ticketId);
-    const selectedWorker = workers.find(w => w._id === workerId);
+    const selectedWorker = workers.find((w) => w._id === workerId);
     const previousTickets = [...tickets];
 
     setTickets((prev) =>
@@ -160,11 +166,12 @@ export default function AdminDashboard({ user }) {
     window.location.href = '/login';
   };
 
+  // Derived Values
   const dynamicAnalytics = {
     totalTickets: tickets.length,
-    pending: tickets.filter(t => (t.status || 'Pending').toLowerCase() === 'pending').length,
-    inProgress: tickets.filter(t => ['approved', 'in progress'].includes((t.status || '').toLowerCase())).length,
-    resolved: tickets.filter(t => ['resolved', 'closed'].includes((t.status || '').toLowerCase())).length
+    pending: tickets.filter((t) => (t.status || 'Pending').toLowerCase() === 'pending').length,
+    inProgress: tickets.filter((t) => ['approved', 'in progress'].includes((t.status || '').toLowerCase())).length,
+    resolved: tickets.filter((t) => ['resolved', 'closed'].includes((t.status || '').toLowerCase())).length,
   };
 
   const filteredTickets = tickets.filter((t) => {
@@ -216,9 +223,8 @@ export default function AdminDashboard({ user }) {
   const renderSidebar = () => (
     <div className="h-full flex flex-col justify-between">
       <div>
-        {/* Brand */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="bg-gradient-to-br from-cyan-400 to-blue-500 p-2.2 rounded-lg shadow-[0_0_15px_rgba(0,242,254,0.3)]">
+          <div className="bg-gradient-to-br from-cyan-400 to-blue-500 p-2 rounded-lg shadow-[0_0_15px_rgba(0,242,254,0.3)]">
             <Cpu size={20} className="text-slate-950" />
           </div>
           <div>
@@ -229,24 +235,26 @@ export default function AdminDashboard({ user }) {
           </div>
         </div>
 
-        {/* User Card */}
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 mb-5">
           <div className="flex items-center gap-2.5 mb-2">
-            <div className="bg-cyan-400 w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-slate-950 text-sm">
+            <div className="bg-cyan-400 w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-slate-950 text-sm shrink-0">
               {currentUser?.name ? currentUser.name[0].toUpperCase() : 'A'}
             </div>
-            <div>
-              <p className="m-0 font-bold text-slate-100 text-xs">{currentUser?.name}</p>
+            <div className="min-w-0">
+              <p className="m-0 font-bold text-slate-100 text-xs truncate">{currentUser?.name}</p>
               <span className="text-[10px] text-cyan-400 font-bold block">Super Admin Access</span>
             </div>
           </div>
           <div className="text-[10px] text-slate-500 border-t border-slate-800 pt-2 flex flex-col gap-1">
-            <span className="flex items-center gap-1.5"><Mail size={11} className="text-cyan-400" /> {currentUser?.email}</span>
-            <span className="flex items-center gap-1.5"><Database size={11} className="text-cyan-400" /> MongoDB: Connected</span>
+            <span className="flex items-center gap-1.5 truncate">
+              <Mail size={11} className="text-cyan-400 shrink-0" /> {currentUser?.email}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Database size={11} className="text-cyan-400 shrink-0" /> MongoDB: Connected
+            </span>
           </div>
         </div>
 
-        {/* Nav Links */}
         <nav className="flex flex-col gap-1.5">
           {[
             { id: 'dashboard', label: 'System Overview', icon: LayoutDashboard },
@@ -260,16 +268,19 @@ export default function AdminDashboard({ user }) {
                 key={item.id}
                 whileHover={{ x: 4 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all text-xs font-semibold cursor-pointer ${
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setSidebarOpen(false);
+                }}
+                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all text-xs font-semibold cursor-pointer w-full ${
                   isActive
                     ? 'border-cyan-400 bg-cyan-400/10 text-cyan-400 font-extrabold'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 truncate">
                   <Icon size={16} className={isActive ? 'text-cyan-400' : 'text-slate-500'} />
-                  {item.label}
+                  <span className="truncate">{item.label}</span>
                 </div>
                 <ChevronRight size={14} className={isActive ? 'text-cyan-400' : 'text-slate-600'} />
               </motion.button>
@@ -278,12 +289,11 @@ export default function AdminDashboard({ user }) {
         </nav>
       </div>
 
-      {/* Logout */}
       <motion.button
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.96 }}
         onClick={handleLogout}
-        className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer font-bold text-xs transition-all"
+        className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 cursor-pointer font-bold text-xs transition-all mt-4"
       >
         <LogOut size={14} /> Exit System Session
       </motion.button>
@@ -292,21 +302,18 @@ export default function AdminDashboard({ user }) {
 
   return (
     <div className="flex min-h-screen bg-[#080a0f] text-slate-100 font-sans">
-      {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex w-64 bg-[#05070a] border-r border-slate-800 p-5 flex-col shrink-0">
+      <aside className="hidden md:flex w-64 bg-[#05070a] border-r border-slate-800 p-5 flex-col shrink-0 h-screen sticky top-0">
         {renderSidebar()}
       </aside>
 
-      {/* MOBILE TOPBAR */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[#05070a] border-b border-slate-800 flex items-center justify-between px-4 z-40">
-        <button onClick={() => setSidebarOpen(true)} className="bg-transparent border-0 text-white cursor-pointer">
+        <button onClick={() => setSidebarOpen(true)} className="bg-transparent border-0 text-white cursor-pointer p-1">
           <Menu size={22} className="text-cyan-400" />
         </button>
         <h2 className="text-sm font-extrabold text-white m-0">ADMINCORE</h2>
         <div className="w-5" />
       </div>
 
-      {/* MOBILE DRAWER */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
@@ -322,10 +329,10 @@ export default function AdminDashboard({ user }) {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed top-0 left-0 bottom-0 w-64 bg-[#05070a] border-r border-slate-800 p-4 z-50 md:hidden"
+              className="fixed top-0 left-0 bottom-0 w-64 bg-[#05070a] border-r border-slate-800 p-4 z-50 md:hidden overflow-y-auto"
             >
               <div className="flex justify-end mb-2">
-                <button onClick={() => setSidebarOpen(false)} className="bg-transparent border-0 text-slate-400 cursor-pointer">
+                <button onClick={() => setSidebarOpen(false)} className="bg-transparent border-0 text-slate-400 cursor-pointer p-1">
                   <X size={18} />
                 </button>
               </div>
@@ -335,10 +342,8 @@ export default function AdminDashboard({ user }) {
         )}
       </AnimatePresence>
 
-      {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full pt-20 px-4 pb-8 md:p-8">
-
+        <main className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full pt-20 px-4 pb-8 md:pt-8 md:px-8">
           {errorMsg && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -350,7 +355,6 @@ export default function AdminDashboard({ user }) {
           )}
 
           <AnimatePresence mode="wait">
-            {/* TAB 1: OVERVIEW */}
             {activeTab === 'dashboard' && (
               <motion.div
                 key="overview"
@@ -361,7 +365,7 @@ export default function AdminDashboard({ user }) {
               >
                 <div className="bg-slate-900 border border-slate-800 border-l-4 border-l-cyan-400 rounded-xl p-6 mb-5">
                   <div className="flex items-center gap-3.5">
-                    <div className="bg-cyan-400 p-2.5 rounded-lg shadow-[0_0_15px_rgba(0,242,254,0.3)]">
+                    <div className="bg-cyan-400 p-2.5 rounded-lg shadow-[0_0_15px_rgba(0,242,254,0.3)] shrink-0">
                       <ShieldCheck size={24} className="text-slate-950" />
                     </div>
                     <div>
@@ -378,7 +382,7 @@ export default function AdminDashboard({ user }) {
                     { title: 'Total System Tickets', count: dynamicAnalytics.totalTickets, color: 'text-white', Icon: ClipboardList, borderTop: 'border-t-cyan-400', iconColor: '#00f2fe' },
                     { title: 'Pending Clearance', count: dynamicAnalytics.pending, color: 'text-amber-500', Icon: Clock, borderTop: 'border-t-amber-500', iconColor: '#f59e0b' },
                     { title: 'Approved / In-Progress', count: dynamicAnalytics.inProgress, color: 'text-sky-400', Icon: CheckCircle, borderTop: 'border-t-sky-400', iconColor: '#38bdf8' },
-                    { title: 'Resolved History Logs', count: dynamicAnalytics.resolved, color: 'text-emerald-500', Icon: CheckCircle, borderTop: 'border-t-emerald-500', iconColor: '#10b981' }
+                    { title: 'Resolved History Logs', count: dynamicAnalytics.resolved, color: 'text-emerald-500', Icon: CheckCircle, borderTop: 'border-t-emerald-500', iconColor: '#10b981' },
                   ].map((stat, i) => (
                     <motion.div key={i} whileHover={{ y: -3 }} className={`bg-slate-900 border border-slate-800 p-4 rounded-lg border-t-2 ${stat.borderTop}`}>
                       <div className="flex justify-between items-center">
@@ -420,7 +424,6 @@ export default function AdminDashboard({ user }) {
               </motion.div>
             )}
 
-            {/* TAB 2: COMPLAINTS STREAM */}
             {activeTab === 'complaints' && (
               <motion.div
                 key="complaints"
@@ -445,10 +448,9 @@ export default function AdminDashboard({ user }) {
                   </motion.button>
                 </div>
 
-                {/* Filters */}
                 <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg mb-4 flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-1 min-w-[200px] bg-[#080a0f] border border-slate-800 px-2.5 py-1 rounded-md">
-                    <Search size={14} className="text-cyan-400" />
+                    <Search size={14} className="text-cyan-400 shrink-0" />
                     <input
                       type="text"
                       placeholder="Search ticket titles..."
@@ -463,7 +465,7 @@ export default function AdminDashboard({ user }) {
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
-                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none"
+                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none cursor-pointer"
                     >
                       <option value="all">All Status</option>
                       <option value="pending">Pending</option>
@@ -477,7 +479,7 @@ export default function AdminDashboard({ user }) {
                     <select
                       value={priorityFilter}
                       onChange={(e) => setPriorityFilter(e.target.value)}
-                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none"
+                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none cursor-pointer"
                     >
                       <option value="all">All Priorities</option>
                       <option value="normal">Normal</option>
@@ -491,9 +493,11 @@ export default function AdminDashboard({ user }) {
                     <select
                       value={categoryFilter}
                       onChange={(e) => setCategoryFilter(e.target.value)}
-                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none"
+                      className="bg-[#080a0f] border border-slate-800 text-white rounded-md px-2 py-1 text-xs outline-none cursor-pointer"
                     >
-                      {ALL_CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
+                      {ALL_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -532,16 +536,17 @@ export default function AdminDashboard({ user }) {
                         <div className="flex justify-between items-center flex-wrap gap-3 pt-2.5 border-t border-white/5">
                           <div className="flex gap-4 flex-wrap items-center">
                             <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                              <User size={12} className="text-cyan-400" /> <strong className="text-slate-100">Customer:</strong> {ticket.user?.name || ticket.userName || 'Customer User'}
+                              <User size={12} className="text-cyan-400 shrink-0" />
+                              <strong className="text-slate-100">Customer:</strong> {ticket.user?.name || ticket.userName || 'Customer User'}
                             </span>
                             <div className="flex items-center gap-1.5">
-                              <Wrench size={12} className="text-amber-500" />
+                              <Wrench size={12} className="text-amber-500 shrink-0" />
                               <strong className="text-slate-100 text-xs">Assign Worker:</strong>
-                              <select 
+                              <select
                                 value={ticket.assignedWorker?._id || ticket.assignedWorker || ''}
                                 onChange={(e) => handleWorkerAssign(ticket._id, e.target.value)}
                                 disabled={updatingId === ticket._id}
-                                className="bg-[#080a0f] border border-slate-800 text-white rounded px-1.5 py-0.5 text-xs outline-none"
+                                className="bg-[#080a0f] border border-slate-800 text-white rounded px-1.5 py-0.5 text-xs outline-none cursor-pointer"
                               >
                                 <option value="">Unassigned</option>
                                 {workers.map((w) => (
@@ -579,7 +584,6 @@ export default function AdminDashboard({ user }) {
               </motion.div>
             )}
 
-            {/* TAB 3: WORKERS DIRECTORY */}
             {activeTab === 'workers' && (
               <motion.div
                 key="workers"
@@ -599,16 +603,16 @@ export default function AdminDashboard({ user }) {
                   ) : workers.map((w) => (
                     <div key={w._id} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="bg-amber-500 w-9 h-9 rounded-lg flex items-center justify-center font-extrabold text-slate-950 text-sm">
+                        <div className="bg-amber-500 w-9 h-9 rounded-lg flex items-center justify-center font-extrabold text-slate-950 text-sm shrink-0">
                           {w.name ? w.name[0].toUpperCase() : 'W'}
                         </div>
-                        <div>
-                          <h3 className="m-0 text-white text-sm font-bold">{w.name}</h3>
-                          <span className="text-[10px] text-cyan-400 font-bold block">{w.category || 'Technician'}</span>
+                        <div className="min-w-0">
+                          <h3 className="m-0 text-white text-sm font-bold truncate">{w.name}</h3>
+                          <span className="text-[10px] text-cyan-400 font-bold block truncate">{w.category || 'Technician'}</span>
                         </div>
                       </div>
                       <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-800 pt-2.5">
-                        <span><strong className="text-slate-100">Email:</strong> {w.email}</span>
+                        <span className="truncate"><strong className="text-slate-100">Email:</strong> {w.email}</span>
                         <span><strong className="text-slate-100">Role:</strong> {w.role}</span>
                       </div>
                     </div>
@@ -616,7 +620,6 @@ export default function AdminDashboard({ user }) {
                 </div>
               </motion.div>
             )}
-
           </AnimatePresence>
         </main>
       </div>

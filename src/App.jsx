@@ -10,38 +10,44 @@ import CreateTicket from './pages/CreateTicket';
 import TicketDetail from './pages/TicketDetail';
 import Navbar from './components/Navbar';
 
-// Protected Route Wrapper
+// Protected Route Wrapper with Dynamic Role Redirection
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useContext(AuthContext);
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0A0706] text-cyan-400 font-bold">
+      <div className="flex h-screen items-center justify-center bg-[#0b1120] text-[#38bdf8] font-bold">
         Loading Session...
       </div>
     );
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
+
+  const normalizedRole = user.role?.toLowerCase()?.trim();
+  if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+    return <Navigate to="/" replace />;
+  }
 
   return children;
 };
 
-// Root Dashboard Redirect based on Role (FIXED NULL CHECK)
+// Root Redirect Helper
 const RoleBasedRedirect = () => {
   const { user } = useContext(AuthContext);
 
   if (!user) return <Navigate to="/login" replace />;
 
-  switch (user.role) {
+  const role = user.role?.toLowerCase()?.trim();
+
+  switch (role) {
     case 'admin':
-      return <AdminDashboard user={user} />;
+      return <Navigate to="/admin-dashboard" replace />;
     case 'worker':
     case 'agent':
-      return <WorkerDashboard />;
+      return <Navigate to="/worker-dashboard" replace />;
     case 'customer':
-      return <CustomerDashboard />;
+      return <Navigate to="/customer-dashboard" replace />;
     default:
       return <Navigate to="/login" replace />;
   }
@@ -51,31 +57,23 @@ function AppContent() {
   const { user } = useContext(AuthContext);
   const location = useLocation();
 
-  // Hide global navbar on pages with dedicated sidebar layouts
-  const sidebarRoutes = ['/', '/customer-dashboard', '/worker-dashboard', '/agent-dashboard', '/admin-dashboard'];
+  const sidebarRoutes = ['/customer-dashboard', '/worker-dashboard', '/agent-dashboard', '/admin-dashboard'];
   const hideGlobalNavbar = sidebarRoutes.includes(location.pathname);
 
   return (
-    <div className="min-h-screen bg-[#0A0706] text-[#E8D8C8] font-sans">
+    <div className="min-h-screen bg-[#0b1120] text-[#f8fafc] font-sans">
       {!hideGlobalNavbar && <Navbar />}
 
       <main className={hideGlobalNavbar ? "w-full min-h-screen" : "container mx-auto px-4 py-6"}>
         <Routes>
-          {/* Public Auth Routes */}
-          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
-          <Route path="/register" element={!user ? <Register /> : <Navigate to="/" replace />} />
+          {/* Auth Routes */}
+          <Route path="/login" element={!user ? <Login /> : <RoleBasedRedirect />} />
+          <Route path="/register" element={!user ? <Register /> : <RoleBasedRedirect />} />
 
-          {/* Dynamic Root Route */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <RoleBasedRedirect />
-              </ProtectedRoute>
-            }
-          />
+          {/* Root Route */}
+          <Route path="/" element={<RoleBasedRedirect />} />
 
-          {/* Role-Specific Dashboards */}
+          {/* Dashboards */}
           <Route
             path="/admin-dashboard"
             element={
@@ -112,7 +110,7 @@ function AppContent() {
             }
           />
 
-          {/* Ticket Features */}
+          {/* Features */}
           <Route
             path="/create-ticket"
             element={
@@ -131,7 +129,7 @@ function AppContent() {
             }
           />
 
-          {/* Fallback */}
+          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
