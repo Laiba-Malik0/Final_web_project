@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import {
@@ -8,15 +7,8 @@ import {
   ClipboardList, Wrench, Search, Cpu, Database
 } from 'lucide-react';
 
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://final-web-backend-eta.vercel.app/api',
-});
-
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import API from '../api'; 
+import { AuthContext } from '../context/AuthContext';
 
 const ALL_CATEGORIES = [
   'All Categories',
@@ -27,9 +19,10 @@ const ALL_CATEGORIES = [
   'Carpentry / Maintenance'
 ];
 
-export default function AdminDashboard({ user }) {
+export default function AdminDashboard() {
+  const { user: contextUser, logout } = useContext(AuthContext);
   const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
-  const currentUser = user || storedUser || { name: 'Admin Control', email: 'admin@system.com', role: 'admin' };
+  const currentUser = contextUser || storedUser || { name: 'Admin Control', email: 'admin@system.com', role: 'admin' };
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -48,8 +41,56 @@ export default function AdminDashboard({ user }) {
   const cardsContainerRef = useRef(null);
   const workersContainerRef = useRef(null);
 
-  // Data Fetching
-  const fetchAdminData = useCallback(async () => {
+  // 1. Safe Data Fetching Effect (Fixed Cascading Render Warning)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchAdminData = async () => {
+      setLoading(true);
+      try {
+        const [ticketsRes, workersRes] = await Promise.all([
+          API.get('/tickets/all'),
+          API.get('/admin/users/workers'),
+        ]);
+
+        if (!isMounted) return;
+
+        const rawTickets = Array.isArray(ticketsRes.data)
+          ? ticketsRes.data
+          : Array.isArray(ticketsRes.data?.tickets)
+          ? ticketsRes.data.tickets
+          : [];
+
+        const rawWorkers = Array.isArray(workersRes.data)
+          ? workersRes.data
+          : Array.isArray(workersRes.data?.workers)
+          ? workersRes.data.workers
+          : [];
+
+        setTickets(rawTickets);
+        setWorkers(rawWorkers);
+        setErrorMsg('');
+      } catch (err) {
+        console.error('Admin data fetch error:', err);
+        if (isMounted) {
+          setTickets([]);
+          setWorkers([]);
+          setErrorMsg(err.response?.data?.message || 'MongoDB / Backend connection error.');
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchAdminData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Sync Button Handler
+  const handleManualRefresh = async () => {
     setLoading(true);
     try {
       const [ticketsRes, workersRes] = await Promise.all([
@@ -76,50 +117,58 @@ export default function AdminDashboard({ user }) {
       console.error('Admin data fetch error:', err);
       setTickets([]);
       setWorkers([]);
-      setErrorMsg('MongoDB / Backend connection error.');
+      setErrorMsg(err.response?.data?.message || 'MongoDB / Backend connection error.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
+  // Dynamic Filtering Calculation
+  const filteredTickets = tickets.filter((t) => {
+    const s = (t.status || 'Pending').toLowerCase();
+    const p = (t.priority || 'Normal').toLowerCase();
+    const c = (t.category || '').toLowerCase();
+    const title = (t.title || '').toLowerCase();
+
+    if (statusFilter === 'pending' && s !== 'pending') return false;
+    if (statusFilter === 'approved' && !['approved', 'in progress', 'resolved'].includes(s)) return false;
+    if (statusFilter === 'rejected' && !['rejected', 'reject', 'closed'].includes(s)) return false;
+
+    if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
+    if (categoryFilter !== 'All Categories' && !c.includes(categoryFilter.toLowerCase().split(' ')[0])) return false;
+    if (searchQuery && !title.includes(searchQuery.toLowerCase())) return false;
+
+    return true;
+  });
+
+  // GSAP Stagger Animations
   useEffect(() => {
-    fetchAdminData();
-  }, [fetchAdminData]);
-
-  // GSAP Animations with RequestAnimationFrame context safeguard
-  useEffect(() => {
-    let ctx;
-    const animFrame = requestAnimationFrame(() => {
-      ctx = gsap.context(() => {
-        if (activeTab === 'complaints' && cardsContainerRef.current && !loading) {
-          const children = cardsContainerRef.current.children;
-          if (children.length > 0) {
-            gsap.fromTo(
-              children,
-              { opacity: 0, y: 20 },
-              { opacity: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'power2.out', clearProps: 'all' }
-            );
-          }
+    let ctx = gsap.context(() => {
+      if (activeTab === 'complaints' && cardsContainerRef.current && !loading && filteredTickets.length > 0) {
+        const children = cardsContainerRef.current.children;
+        if (children && children.length > 0) {
+          gsap.fromTo(
+            children,
+            { opacity: 0, y: 20 },
+            { opacity: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'power2.out', clearProps: 'all' }
+          );
         }
+      }
 
-        if (activeTab === 'workers' && workersContainerRef.current && !loading) {
-          const children = workersContainerRef.current.children;
-          if (children.length > 0) {
-            gsap.fromTo(
-              children,
-              { opacity: 0, scale: 0.96, y: 15 },
-              { opacity: 1, scale: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'back.out(1.1)', clearProps: 'all' }
-            );
-          }
+      if (activeTab === 'workers' && workersContainerRef.current && !loading && workers.length > 0) {
+        const children = workersContainerRef.current.children;
+        if (children && children.length > 0) {
+          gsap.fromTo(
+            children,
+            { opacity: 0, scale: 0.96, y: 15 },
+            { opacity: 1, scale: 1, y: 0, duration: 0.35, stagger: 0.05, ease: 'back.out(1.1)', clearProps: 'all' }
+          );
         }
-      });
+      }
     });
 
-    return () => {
-      cancelAnimationFrame(animFrame);
-      if (ctx) ctx.revert();
-    };
-  }, [activeTab, loading, statusFilter, priorityFilter, categoryFilter, searchQuery]);
+    return () => ctx.revert();
+  }, [activeTab, loading, filteredTickets.length, workers.length]);
 
   // Action Handlers
   const handleStatusUpdate = async (ticketId, newStatus) => {
@@ -162,34 +211,21 @@ export default function AdminDashboard({ user }) {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    if (logout) logout();
+    else {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    }
     window.location.href = '/login';
   };
 
-  // Derived Values
+  // Analytics Calculation
   const dynamicAnalytics = {
     totalTickets: tickets.length,
     pending: tickets.filter((t) => (t.status || 'Pending').toLowerCase() === 'pending').length,
     inProgress: tickets.filter((t) => ['approved', 'in progress'].includes((t.status || '').toLowerCase())).length,
     resolved: tickets.filter((t) => ['resolved', 'closed'].includes((t.status || '').toLowerCase())).length,
   };
-
-  const filteredTickets = tickets.filter((t) => {
-    const s = (t.status || 'Pending').toLowerCase();
-    const p = (t.priority || 'Normal').toLowerCase();
-    const c = (t.category || '').toLowerCase();
-    const title = (t.title || '').toLowerCase();
-
-    if (statusFilter === 'pending' && s !== 'pending') return false;
-    if (statusFilter === 'approved' && !['approved', 'in progress', 'resolved'].includes(s)) return false;
-    if (statusFilter === 'rejected' && !['rejected', 'reject', 'closed'].includes(s)) return false;
-
-    if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
-    if (categoryFilter !== 'All Categories' && !c.includes(categoryFilter.toLowerCase().split(' ')[0])) return false;
-    if (searchQuery && !title.includes(searchQuery.toLowerCase())) return false;
-
-    return true;
-  });
 
   const renderStatusBadge = (status = 'Pending') => {
     const s = status.toLowerCase();
@@ -440,7 +476,7 @@ export default function AdminDashboard({ user }) {
                   <motion.button
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
-                    onClick={fetchAdminData}
+                    onClick={handleManualRefresh}
                     disabled={loading}
                     className="bg-slate-900 border border-slate-800 text-cyan-400 px-3 py-1.5 rounded-md cursor-pointer flex items-center gap-1.5 text-xs font-bold"
                   >

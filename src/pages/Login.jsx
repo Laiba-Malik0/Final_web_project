@@ -7,7 +7,7 @@ import { AuthContext } from "../context/AuthContext";
 
 function Login() {
   const navigate = useNavigate();
-  const { user, login } = useContext(AuthContext); // Context Integration
+  const { user, login } = useContext(AuthContext);
 
   const [activeRole, setActiveRole] = useState("customer");
   const [isLogin, setIsLogin] = useState(true);
@@ -16,12 +16,10 @@ function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // OTP Modal State
   const [otpStep, setOtpStep] = useState(0);
   const [resetData, setResetData] = useState({ email: "", otp: "", newPassword: "" });
   const [modalMsg, setModalMsg] = useState("");
 
-  // Fix 1: Auto Redirect if User is Already Logged In
   useEffect(() => {
     if (user) {
       const role = user.role?.toLowerCase()?.trim();
@@ -53,7 +51,6 @@ function Login() {
 
     try {
       if (isLogin) {
-        // Fix 2: Clean Payload Request
         const res = await API.post("/auth/login", { 
           email: cleanEmail, 
           password: cleanPassword,
@@ -63,7 +60,6 @@ function Login() {
         const userData = res.data.user || res.data;
         const userToken = res.data.token;
 
-        // Context state update
         login(userData, userToken);
 
         const userRole = (userData?.role || activeRole).toLowerCase().trim();
@@ -153,19 +149,15 @@ function Login() {
         .heading-font { font-family: 'Outfit', sans-serif; }
       `}</style>
 
-      {/* Ambient Lighting Backgrounds */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-[#38bdf8]/10 rounded-full blur-[120px] sm:blur-[150px] pointer-events-none -z-10" />
 
-      {/* Main Glassmorphic Card */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
-        className="w-full max-w-[400px] sm:max-w-[440px] bg-[#0f172a]/90 border border-[#1e293b] rounded-2xl sm:rounded-3xl p-5 sm:p-7 sm:p-8 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] flex flex-col justify-between relative overflow-hidden"
+        className="w-full max-w-[400px] sm:max-w-[440px] bg-[#0f172a]/90 border border-[#1e293b] rounded-2xl sm:rounded-3xl p-5 sm:p-7 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] flex flex-col justify-between relative overflow-hidden"
       >
         <div className="space-y-4 sm:space-y-6">
-          
-          {/* Header */}
           <div className="flex items-center justify-center gap-2.5 sm:gap-3">
             <div className="bg-white p-2 sm:p-2.5 rounded-xl shadow-[0_4px_12px_rgba(255,255,255,0.15)] flex items-center justify-center shrink-0">
               <Search size={18} className="text-[#0f172a] sm:w-5 sm:h-5" />
@@ -180,7 +172,6 @@ function Login() {
             </div>
           </div>
 
-          {/* Role Navigation Tabs */}
           <div className="grid grid-cols-3 gap-1 bg-[#0b1120] p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-[#1e293b] relative">
             {[
               { id: "customer", label: "Customer", icon: User },
@@ -197,11 +188,7 @@ function Login() {
                   className="relative py-2 sm:py-2.5 text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all z-10 flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer select-none"
                 >
                   <Icon size={12} className={`relative z-20 transition-colors sm:w-3.5 sm:h-3.5 ${isActive ? "text-[#0f172a]" : "text-[#64748b]"}`} />
-                  <span
-                    className={`relative z-20 transition-colors ${
-                      isActive ? "text-[#0f172a]" : "text-[#94a3b8]"
-                    }`}
-                  >
+                  <span className={`relative z-20 transition-colors ${isActive ? "text-[#0f172a]" : "text-[#94a3b8]"}`}>
                     {tab.label}
                   </span>
                   {isActive && (
@@ -216,7 +203,6 @@ function Login() {
             })}
           </div>
 
-          {/* Title & Context */}
           <div className="text-center space-y-0.5 sm:space-y-1">
             <h2 className="heading-font text-xl sm:text-2xl font-extrabold text-white tracking-tight">
               {isLogin ? "Welcome Back" : `Register ${activeRole.toUpperCase()}`}
@@ -226,7 +212,6 @@ function Login() {
             </p>
           </div>
 
-          {/* Error Banner */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
@@ -237,7 +222,6 @@ function Login() {
             </motion.div>
           )}
 
-          {/* Dynamic Form Area */}
           <AnimatePresence mode="wait">
             <motion.form
               key={activeRole + (isLogin ? "login" : "reg")}
@@ -312,7 +296,6 @@ function Login() {
           </AnimatePresence>
         </div>
 
-        {/* Footer Switches */}
         <div className="flex justify-between items-center pt-3 sm:pt-4 mt-5 sm:mt-6 border-t border-[#1e293b] text-xs text-[#94a3b8]">
           {activeRole !== "admin" ? (
             <button 
@@ -341,7 +324,6 @@ function Login() {
         </div>
       </motion.div>
 
-      {/* Forgot Password Modal Overlay */}
       <AnimatePresence>
         {otpStep > 0 && (
           <motion.div

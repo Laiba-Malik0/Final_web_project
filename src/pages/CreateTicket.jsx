@@ -35,21 +35,30 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
     category: 'Plumbing Fix',
     priority: 'Normal',
     date: new Date().toISOString().split('T')[0],
-    assignedWorker: '', // Ab ye Worker ID hold karega
+    assignedWorker: '', // Worker ID hold karega
     description: ''
   });
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchWorkers = async () => {
       try {
         const workersRes = await API.get('/auth/workers');
         const rawWorkers = workersRes.data?.workers || workersRes.data || [];
-        setWorkersList(Array.isArray(rawWorkers) ? rawWorkers : []);
+        if (isMounted) {
+          setWorkersList(Array.isArray(rawWorkers) ? rawWorkers : []);
+        }
       } catch (err) {
         console.error('Error fetching workers:', err);
       }
     };
+
     fetchWorkers();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleChange = (e) => {

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import {
@@ -8,14 +7,7 @@ import {
   ClipboardList, Filter, Lock, Wrench
 } from 'lucide-react';
 
-const SOCKET_URL = import.meta.env?.VITE_API_URL || 'https://final-web-backend-eta.vercel.app/api';
-
-const API = axios.create({ baseURL: SOCKET_URL });
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-}, (error) => Promise.reject(error));
+import API from '../api'; // FIXED: Unified API import
 
 const ALL_CATEGORIES = [
   'All Categories',
@@ -120,7 +112,6 @@ export default function WorkerDashboard({ user }) {
 
   const cardsContainerRef = useRef(null);
 
-  // Memoized fetch function using useCallback to avoid linter warnings
   const fetchWorkerTickets = useCallback(async () => {
     setLoading(true);
     try {
@@ -135,7 +126,6 @@ export default function WorkerDashboard({ user }) {
     }
   }, []);
 
-  // FIXED: Triggered without triggering synchronous cascading state warning
   useEffect(() => {
     let isMounted = true;
     
@@ -260,12 +250,10 @@ export default function WorkerDashboard({ user }) {
 
   return (
     <div className="flex min-h-screen bg-[#0d131a] text-slate-100 font-sans">
-      {/* DESKTOP SIDEBAR */}
       <aside className="hidden lg:flex w-64 bg-[#090d12] border-r border-[#1a2634] p-4 flex-col">
         <SidebarContent {...sidebarProps} />
       </aside>
 
-      {/* MOBILE HEADER */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-[#090d12] border-b border-[#1a2634] flex items-center justify-between px-4 z-40">
         <button onClick={() => setSidebarOpen(true)} className="bg-transparent border-none text-white cursor-pointer">
           <Menu size={22} />
@@ -276,7 +264,6 @@ export default function WorkerDashboard({ user }) {
         <div className="w-5"></div>
       </div>
 
-      {/* MOBILE DRAWER */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
@@ -305,7 +292,6 @@ export default function WorkerDashboard({ user }) {
         )}
       </AnimatePresence>
 
-      {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0">
         <main className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full pt-16 lg:pt-7 px-4 lg:px-8 pb-6">
 
