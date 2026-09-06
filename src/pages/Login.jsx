@@ -85,7 +85,7 @@ function Login() {
     } catch (err) {
       console.error("Auth error:", err.response);
       setError(err.response?.data?.message || err.response?.data?.error || "Authentication failed.");
-    } font-medium; {
+    } finally {
       setLoading(false);
     }
   };
