@@ -41,86 +41,66 @@ export default function AdminDashboard() {
   const cardsContainerRef = useRef(null);
   const workersContainerRef = useRef(null);
 
-  // 1. Safe Data Fetching Effect (Fixed Cascading Render Warning)
+  // Safe Sequential Data Fetching (Prevents Serverless Choking)
+  const loadDataSequentially = async (isMounted = true) => {
+    setLoading(true);
+    let fetchedTickets = [];
+    let fetchedWorkers = [];
+    let hasError = false;
+
+    // Request 1: Tickets
+    try {
+      const ticketsRes = await API.get('/tickets/all');
+      fetchedTickets = Array.isArray(ticketsRes.data)
+        ? ticketsRes.data
+        : Array.isArray(ticketsRes.data?.tickets)
+        ? ticketsRes.data.tickets
+        : [];
+    } catch (err) {
+      console.error('Tickets fetch error:', err);
+      hasError = true;
+    }
+
+    // Small delay to prevent serverless socket collision
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    // Request 2: Workers
+    try {
+      const workersRes = await API.get('/admin/users/workers');
+      fetchedWorkers = Array.isArray(workersRes.data)
+        ? workersRes.data
+        : Array.isArray(workersRes.data?.workers)
+        ? workersRes.data.workers
+        : [];
+    } catch (err) {
+      console.error('Workers fetch error:', err);
+      hasError = true;
+    }
+
+    if (!isMounted) return;
+
+    if (hasError && fetchedTickets.length === 0 && fetchedWorkers.length === 0) {
+      setErrorMsg('MongoDB / Backend connection error.');
+    } else {
+      setErrorMsg('');
+    }
+
+    setTickets(fetchedTickets);
+    setWorkers(fetchedWorkers);
+    setLoading(false);
+  };
+
   useEffect(() => {
     let isMounted = true;
-
-    const fetchAdminData = async () => {
-      setLoading(true);
-      try {
-        const [ticketsRes, workersRes] = await Promise.all([
-          API.get('/tickets/all'),
-          API.get('/admin/users/workers'),
-        ]);
-
-        if (!isMounted) return;
-
-        const rawTickets = Array.isArray(ticketsRes.data)
-          ? ticketsRes.data
-          : Array.isArray(ticketsRes.data?.tickets)
-          ? ticketsRes.data.tickets
-          : [];
-
-        const rawWorkers = Array.isArray(workersRes.data)
-          ? workersRes.data
-          : Array.isArray(workersRes.data?.workers)
-          ? workersRes.data.workers
-          : [];
-
-        setTickets(rawTickets);
-        setWorkers(rawWorkers);
-        setErrorMsg('');
-      } catch (err) {
-        console.error('Admin data fetch error:', err);
-        if (isMounted) {
-          setTickets([]);
-          setWorkers([]);
-          setErrorMsg(err.response?.data?.message || 'MongoDB / Backend connection error.');
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    fetchAdminData();
+    loadDataSequentially(isMounted);
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // Sync Button Handler
-  const handleManualRefresh = async () => {
-    setLoading(true);
-    try {
-      const [ticketsRes, workersRes] = await Promise.all([
-        API.get('/tickets/all'),
-        API.get('/admin/users/workers'),
-      ]);
-
-      const rawTickets = Array.isArray(ticketsRes.data)
-        ? ticketsRes.data
-        : Array.isArray(ticketsRes.data?.tickets)
-        ? ticketsRes.data.tickets
-        : [];
-
-      const rawWorkers = Array.isArray(workersRes.data)
-        ? workersRes.data
-        : Array.isArray(workersRes.data?.workers)
-        ? workersRes.data.workers
-        : [];
-
-      setTickets(rawTickets);
-      setWorkers(rawWorkers);
-      setErrorMsg('');
-    } catch (err) {
-      console.error('Admin data fetch error:', err);
-      setTickets([]);
-      setWorkers([]);
-      setErrorMsg(err.response?.data?.message || 'MongoDB / Backend connection error.');
-    } finally {
-      setLoading(false);
-    }
+  const handleManualRefresh = () => {
+    loadDataSequentially(true);
   };
 
   // Dynamic Filtering Calculation
