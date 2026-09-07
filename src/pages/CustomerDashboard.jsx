@@ -5,7 +5,7 @@ import {
   LifeBuoy, CheckCircle, XCircle, Clock, RefreshCw, Mail,
   AlertCircle, LogOut, ChevronRight, Menu, X, LayoutDashboard,
   ClipboardList, PlusCircle, Filter, Send, Tag, ShieldAlert,
-  User, Calendar, Trash2, Edit2, Check, Lock, Hash
+  User, Calendar, Trash2, Edit2, Check, Lock, Hash, Wrench
 } from 'lucide-react';
 
 import API from '../api';
@@ -406,77 +406,120 @@ export default function CustomerDashboard({ user }) {
               </motion.div>
             )}
 
+            {/* Compact Card Layout for Complaint Form */}
             {activeTab === 'new-ticket' && (
-              <motion.div key="new-ticket" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                <div className="mb-4">
-                  <h1 className="text-white m-0 text-xl lg:text-2xl font-extrabold">
-                    Lodge New Complaint
-                  </h1>
-                  <p className="text-slate-400 text-xs m-0 mt-1">
-                    Fill in details, select date and assign a specialist field technician.
-                  </p>
-                </div>
-
-                {formMessage && (
-                  <div className={`p-3 rounded-lg text-xs font-bold mb-4 border ${
-                    formMessage.type === 'error'
-                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                      : 'bg-green-500/10 border-green-500/30 text-green-400'
-                  }`}>
-                    {formMessage.text}
-                  </div>
-                )}
-
-                <form onSubmit={handleCreateTicket} className="bg-[#131c26] border border-[#223142] rounded-xl p-5 flex flex-col gap-4">
+              <motion.div 
+                key="new-ticket" 
+                initial={{ opacity: 0, y: 10 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                exit={{ opacity: 0, y: -10 }}
+                className="max-w-2xl mx-auto py-2"
+              >
+                <div className="bg-[#131c26] border border-[#223142] rounded-2xl p-6 shadow-2xl">
                   
-                  {/* Row 1: Username & Target Date */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Card Header */}
+                  <div className="border-b border-[#223142] pb-4 mb-5">
+                    <h1 className="text-white m-0 text-xl font-extrabold flex items-center gap-2">
+                      <PlusCircle className="text-sky-400" size={22} /> Lodge New Complaint
+                    </h1>
+                    <p className="text-slate-400 text-xs m-0 mt-1">
+                      Fill in the details below to assign a ticket directly to a field specialist.
+                    </p>
+                  </div>
+
+                  {formMessage && (
+                    <div className={`p-3 rounded-lg text-xs font-bold mb-4 border ${
+                      formMessage.type === 'error'
+                        ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                        : 'bg-green-500/10 border-green-500/30 text-green-400'
+                    }`}>
+                      {formMessage.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleCreateTicket} className="flex flex-col gap-4">
+                    
+                    {/* Field 1: Issue Subject / Title */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
-                        <User size={12} className="text-sky-400" /> Customer Name
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        Issue Subject / Title *
                       </label>
                       <input
                         type="text"
-                        value={currentUser?.name || 'Customer'}
-                        readOnly
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-slate-400 cursor-not-allowed outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
-                        <Calendar size={12} className="text-sky-400" /> Scheduled Date *
-                      </label>
-                      <input
-                        type="date"
-                        value={preferredDate}
-                        onChange={(e) => setPreferredDate(e.target.value)}
+                        placeholder="e.g. Water Leakage in Main Restroom"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
                         required
                         className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
                       />
                     </div>
-                  </div>
 
-                  {/* Row 2: Category & Worker Dropdown */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
-                        <Tag size={12} className="text-sky-400" /> Category *
-                      </label>
-                      <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
-                      >
-                        {CATEGORIES.map((cat) => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
+                    {/* Field 2 & 3: Category & Priority */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
+                          <Tag size={13} className="text-sky-400" /> Category
+                        </label>
+                        <select
+                          value={category}
+                          onChange={(e) => setCategory(e.target.value)}
+                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
+                        >
+                          {CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
+                          <ShieldAlert size={13} className="text-sky-400" /> Priority Level
+                        </label>
+                        <select
+                          value={priority}
+                          onChange={(e) => setPriority(e.target.value)}
+                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
+                        >
+                          <option value="Low">Low Priority</option>
+                          <option value="Normal">Normal Priority</option>
+                          <option value="High">High Priority</option>
+                          <option value="Urgent">Urgent</option>
+                        </select>
+                      </div>
                     </div>
 
+                    {/* Field 4 & 5: Customer Name & Target Date */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
+                          <User size={13} className="text-sky-400" /> Customer Name
+                        </label>
+                        <input
+                          type="text"
+                          value={currentUser?.name || 'Customer'}
+                          readOnly
+                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-slate-400 cursor-not-allowed outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
+                          <Calendar size={13} className="text-sky-400" /> Scheduled Date *
+                        </label>
+                        <input
+                          type="date"
+                          value={preferredDate}
+                          onChange={(e) => setPreferredDate(e.target.value)}
+                          required
+                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Field 6: Select Worker */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
-                        <User size={12} className="text-sky-400" /> Select Worker / Technician *
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
+                        <Wrench size={13} className="text-sky-400" /> Assigned Worker / Technician *
                       </label>
                       <select
                         value={selectedWorker}
@@ -489,70 +532,41 @@ export default function CustomerDashboard({ user }) {
                         ) : (
                           workers.map((w) => (
                             <option key={w._id || w.id} value={w._id || w.id}>
-                              {w.name} ({w.department || 'General Worker'})
+                              {w.name} ({w.department || 'Field Technician'})
                             </option>
                           ))
                         )}
                       </select>
                     </div>
-                  </div>
 
-                  {/* Row 3: Priority & Problem Title */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Field 7: Detailed Explanation */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">Problem Title *</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Electrical wiring fault in AC unit"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
+                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        Detailed Explanation *
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder="Provide specific details about the issue, location, or equipment involved..."
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
                         required
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors resize-y"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
-                        <ShieldAlert size={12} className="text-sky-400" /> Priority Level
-                      </label>
-                      <select
-                        value={priority}
-                        onChange={(e) => setPriority(e.target.value)}
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
+                    <div className="flex justify-end pt-3">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        type="submit"
+                        disabled={submitting}
+                        className="bg-sky-500 hover:bg-sky-400 text-[#0d131a] border-none px-6 py-2.5 rounded-xl font-extrabold text-xs cursor-pointer flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.3)] disabled:opacity-50"
                       >
-                        <option value="Low">Low Priority</option>
-                        <option value="Normal">Normal Priority</option>
-                        <option value="High">High Priority</option>
-                        <option value="Urgent">Urgent</option>
-                      </select>
+                        <Send size={14} /> {submitting ? 'Submitting...' : 'Submit Complaint'}
+                      </motion.button>
                     </div>
-                  </div>
-
-                  {/* Row 4: Description */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Problem Description *</label>
-                    <textarea
-                      rows={4}
-                      placeholder="Explain the issue in detail..."
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      required
-                      className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors resize-y"
-                    />
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      type="submit"
-                      disabled={submitting}
-                      className="bg-sky-500 text-[#0d131a] border-none px-5 py-2.5 rounded-lg font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shadow-[0_4px_12px_rgba(14,165,233,0.3)] disabled:opacity-50"
-                    >
-                      <Send size={14} /> {submitting ? 'Submitting...' : 'Submit Complaint'}
-                    </motion.button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </motion.div>
             )}
 
