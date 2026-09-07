@@ -4,16 +4,17 @@ import gsap from 'gsap';
 import {
   LifeBuoy, CheckCircle, XCircle, Clock, RefreshCw, Mail,
   AlertCircle, LogOut, ChevronRight, Menu, X, LayoutDashboard,
-  ClipboardList, PlusCircle, Filter, Send, Tag, ShieldAlert
+  ClipboardList, PlusCircle, Filter, Send, Tag, ShieldAlert,
+  User, Calendar, Trash2, Edit2, Check, Lock, Hash
 } from 'lucide-react';
 
 import API from '../api';
 
 const CATEGORIES = [
+  'Electrical',
   'IT / Technical',
   'General Support',
   'Plumbing',
-  'Electrical',
   'Carpentry / Maintenance'
 ];
 
@@ -102,15 +103,22 @@ export default function CustomerDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
+  const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // New Ticket Form State
+  // Form States
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [priority, setPriority] = useState('Normal');
   const [description, setDescription] = useState('');
+  const [selectedWorker, setSelectedWorker] = useState('');
   const [formMessage, setFormMessage] = useState(null);
+
+  // Edit State
+  const [editingTicketId, setEditingTicketId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   // Filters State
   const [statusFilter, setStatusFilter] = useState('all');
@@ -132,9 +140,21 @@ export default function CustomerDashboard({ user }) {
     }
   }, []);
 
+  const fetchWorkers = useCallback(async () => {
+    try {
+      const res = await API.get('/users/workers');
+      const rawWorkers = Array.isArray(res.data) ? res.data : (res.data?.workers || []);
+      setWorkers(rawWorkers);
+      if (rawWorkers.length > 0) setSelectedWorker(rawWorkers[0]._id || rawWorkers[0].id);
+    } catch (err) {
+      console.error('Fetch Workers Error:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchMyTickets();
-  }, [fetchMyTickets]);
+    fetchWorkers();
+  }, [fetchMyTickets, fetchWorkers]);
 
   useEffect(() => {
     if (activeTab === 'my-tickets' && cardsContainerRef.current && !loading) {
@@ -154,8 +174,8 @@ export default function CustomerDashboard({ user }) {
 
   const handleCreateTicket = async (e) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) {
-      setFormMessage({ type: 'error', text: 'Please fill in all required fields.' });
+    if (!title.trim() || !description.trim() || !selectedWorker) {
+      setFormMessage({ type: 'error', text: 'Please fill in all required fields and select a worker.' });
       return;
     }
 
@@ -169,7 +189,7 @@ export default function CustomerDashboard({ user }) {
         priority,
         description,
         userName: currentUser.name,
-        userEmail: currentUser.email
+        assignedWorker: selectedWorker
       });
 
       setTitle('');
@@ -178,7 +198,7 @@ export default function CustomerDashboard({ user }) {
       setPriority('Normal');
       setFormMessage({ type: 'success', text: 'Complaint lodged successfully!' });
       fetchMyTickets();
-      setTimeout(() => setActiveTab('my-tickets'), 1200);
+      setTimeout(() => setActiveTab('my-tickets'), 1000);
     } catch (err) {
       console.error('Create Ticket Error:', err);
       setFormMessage({ type: 'error', text: 'Failed to submit complaint. Please try again.' });
@@ -187,37 +207,79 @@ export default function CustomerDashboard({ user }) {
     }
   };
 
+  const handleDeleteTicket = async (ticketId) => {
+    if (!window.confirm('Are you sure you want to delete this complaint?')) return;
+    try {
+      await API.delete(`/tickets/delete/${ticketId}`);
+      setTickets((prev) => prev.filter((t) => t._id !== ticketId));
+    } catch (err) {
+      console.error('Delete Ticket Error:', err);
+      alert('Failed to delete complaint.');
+    }
+  };
+
+  const handleStartEdit = (ticket) => {
+    setEditingTicketId(ticket._id);
+    setEditTitle(ticket.title);
+    setEditDescription(ticket.description);
+  };
+
+  const handleSaveEdit = async (ticketId) => {
+    try {
+      await API.put(`/tickets/update/${ticketId}`, {
+        title: editTitle,
+        description: editDescription
+      });
+      setTickets((prev) =>
+        prev.map((t) => (t._id === ticketId ? { ...t, title: editTitle, description: editDescription } : t))
+      );
+      setEditingTicketId(null);
+    } catch (err) {
+      console.error('Update Ticket Error:', err);
+      alert('Failed to update complaint.');
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = '/login';
   };
 
-  const filteredTickets = tickets.filter((t) => {
-    const s = (t.status || 'Pending').toLowerCase();
-    const p = (t.priority || 'Normal').toLowerCase();
+  const filteredTickets = useMemo(() => {
+    return tickets.filter((t) => {
+      const s = (t.status || 'Pending').toLowerCase();
+      const p = (t.priority || 'Normal').toLowerCase();
 
-    if (statusFilter === 'pending' && s !== 'pending') return false;
-    if (statusFilter === 'approved' && !['approved', 'in progress', 'resolved'].includes(s)) return false;
-    if (statusFilter === 'rejected' && !['rejected', 'reject', 'closed'].includes(s)) return false;
+      if (statusFilter === 'pending' && s !== 'pending') return false;
+      if (statusFilter === 'approved' && !['approved', 'in progress', 'completed'].includes(s)) return false;
+      if (statusFilter === 'rejected' && s !== 'rejected') return false;
 
-    if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
+      if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
 
-    return true;
-  });
+      return true;
+    });
+  }, [tickets, statusFilter, priorityFilter]);
 
-  const pendingCount = tickets.filter(t => (t.status || 'Pending').toLowerCase() === 'pending').length;
-  const resolvedCount = tickets.filter(t => ['approved', 'in progress', 'resolved'].includes((t.status || '').toLowerCase())).length;
+  const pendingCount = useMemo(() => 
+    tickets.filter(t => (t.status || 'Pending').toLowerCase() === 'pending').length,
+    [tickets]
+  );
+  
+  const resolvedCount = useMemo(() => 
+    tickets.filter(t => ['approved', 'in progress', 'completed'].includes((t.status || '').toLowerCase())).length,
+    [tickets]
+  );
 
   const renderStatusBadge = (status = 'Pending') => {
     const s = status.toLowerCase();
-    const isApproved = ['approved', 'in progress', 'resolved'].includes(s);
-    const isRejected = ['rejected', 'reject', 'closed'].includes(s);
+    const isApproved = ['approved', 'in progress', 'completed'].includes(s);
+    const isRejected = s === 'rejected';
 
     const config = isApproved
-      ? { bg: 'bg-green-500/10 text-green-400 border-green-500/30', Icon: CheckCircle, dot: 'bg-green-400 shadow-[0_0_8px_#4ade80]', text: 'In Progress / Resolved' }
+      ? { bg: 'bg-green-500/10 text-green-400 border-green-500/30', Icon: CheckCircle, dot: 'bg-green-400 shadow-[0_0_8px_#4ade80]', text: status }
       : isRejected
-        ? { bg: 'bg-red-500/10 text-red-400 border-red-500/30', Icon: XCircle, dot: 'bg-red-400 shadow-[0_0_8px_#f87171]', text: 'Rejected / Closed' }
-        : { bg: 'bg-sky-500/15 text-sky-400 border-sky-500/40', Icon: Clock, dot: 'bg-sky-400 shadow-[0_0_8px_#38bdf8]', text: 'Pending Approval' };
+        ? { bg: 'bg-red-500/10 text-red-400 border-red-500/30', Icon: XCircle, dot: 'bg-red-400 shadow-[0_0_8px_#f87171]', text: 'Rejected' }
+        : { bg: 'bg-sky-500/15 text-sky-400 border-sky-500/40', Icon: Clock, dot: 'bg-sky-400 shadow-[0_0_8px_#38bdf8]', text: 'Pending' };
 
     const { bg, Icon, dot, text } = config;
 
@@ -298,7 +360,7 @@ export default function CustomerDashboard({ user }) {
                         Hello, <span className="text-sky-400">{currentUser?.name || 'Customer'}</span>!
                       </h1>
                       <p className="m-0 text-slate-400 text-xs mt-1">
-                        Customer Helpdesk • Lodge complaints and track technical resolution status in real-time.
+                        Customer Helpdesk • Lodge complaints and assign them directly to field technicians.
                       </p>
                     </div>
                   </div>
@@ -307,8 +369,8 @@ export default function CustomerDashboard({ user }) {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-6">
                   {[
                     { title: 'Total Lodged', count: tickets.length, color: 'text-white', Icon: ClipboardList, iconColor: 'text-sky-400', topBorder: 'border-t-sky-500' },
-                    { title: 'In Progress / Pending', count: pendingCount, color: 'text-sky-400', Icon: Clock, iconColor: 'text-sky-400', topBorder: 'border-t-sky-500' },
-                    { title: 'Resolved Tasks', count: resolvedCount, color: 'text-green-400', Icon: CheckCircle, iconColor: 'text-green-400', topBorder: 'border-t-green-400' }
+                    { title: 'Pending Approval', count: pendingCount, color: 'text-sky-400', Icon: Clock, iconColor: 'text-sky-400', topBorder: 'border-t-sky-500' },
+                    { title: 'Approved Tasks', count: resolvedCount, color: 'text-green-400', Icon: CheckCircle, iconColor: 'text-green-400', topBorder: 'border-t-green-400' }
                   ].map((stat, i) => {
                     const StatIcon = stat.Icon;
                     return (
@@ -328,7 +390,7 @@ export default function CustomerDashboard({ user }) {
                 <div className="bg-[#131c26] border border-[#223142] p-4 rounded-xl flex justify-between items-center flex-wrap gap-3">
                   <div>
                     <h3 className="m-0 text-white text-sm font-extrabold">Need Help with Something?</h3>
-                    <p className="m-0 text-slate-400 text-xs mt-0.5">Submit a new complaint ticket to get assigned to our field technicians.</p>
+                    <p className="m-0 text-slate-400 text-xs mt-0.5">Submit a new complaint ticket directly to our designated technicians.</p>
                   </div>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
@@ -349,7 +411,7 @@ export default function CustomerDashboard({ user }) {
                     Lodge New Complaint
                   </h1>
                   <p className="text-slate-400 text-xs m-0 mt-1">
-                    Describe your issue in detail so our technical team can address it promptly.
+                    Fill in details and assign a specialist field technician.
                   </p>
                 </div>
 
@@ -364,31 +426,55 @@ export default function CustomerDashboard({ user }) {
                 )}
 
                 <form onSubmit={handleCreateTicket} className="bg-[#131c26] border border-[#223142] rounded-xl p-5 flex flex-col gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Issue Subject / Title *</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Water Leakage in Main Restroom"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      required
-                      className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
+                        <User size={12} className="text-sky-400" /> Customer Name
+                      </label>
+                      <input
+                        type="text"
+                        value={currentUser?.name || ''}
+                        readOnly
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-slate-400 cursor-not-allowed outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
+                        <Tag size={12} className="text-sky-400" /> Category *
+                      </label>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
+                      >
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
-                        <Tag size={12} className="text-sky-400" /> Category
+                        <User size={12} className="text-sky-400" /> Assign Field Technician *
                       </label>
                       <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors cursor-pointer"
+                        value={selectedWorker}
+                        onChange={(e) => setSelectedWorker(e.target.value)}
+                        required
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
                       >
-                        {CATEGORIES.map((cat) => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
+                        {workers.length === 0 ? (
+                          <option value="">No Workers Available</option>
+                        ) : (
+                          workers.map((w) => (
+                            <option key={w._id || w.id} value={w._id || w.id}>
+                              {w.name} ({w.department || 'General'})
+                            </option>
+                          ))
+                        )}
                       </select>
                     </div>
 
@@ -399,20 +485,33 @@ export default function CustomerDashboard({ user }) {
                       <select
                         value={priority}
                         onChange={(e) => setPriority(e.target.value)}
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors cursor-pointer"
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
                       >
+                        <option value="Low">Low Priority</option>
                         <option value="Normal">Normal Priority</option>
                         <option value="High">High Priority</option>
-                        <option value="Emergency">Emergency</option>
+                        <option value="Urgent">Urgent</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Detailed Explanation *</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">Problem Title *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Electrical wiring fault in AC unit"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required
+                      className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">Problem Description *</label>
                     <textarea
                       rows={4}
-                      placeholder="Provide specific details about the issue, location, or equipment involved..."
+                      placeholder="Explain the issue in detail..."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       required
@@ -443,7 +542,7 @@ export default function CustomerDashboard({ user }) {
                       My Submitted Tickets
                     </h1>
                     <p className="text-slate-400 text-xs m-0 mt-1">
-                      Monitor progress and track resolution status in real-time.
+                      Track technician updates, edit details or manage lodged complaints.
                     </p>
                   </div>
 
@@ -470,9 +569,9 @@ export default function CustomerDashboard({ user }) {
                       onChange={(e) => setStatusFilter(e.target.value)}
                     >
                       <option value="all">All Status</option>
-                      <option value="pending">Pending Approval</option>
-                      <option value="approved">Approved / Resolved</option>
-                      <option value="rejected">Rejected / Closed</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved / Completed</option>
+                      <option value="rejected">Rejected</option>
                     </select>
                   </div>
 
@@ -484,9 +583,10 @@ export default function CustomerDashboard({ user }) {
                       onChange={(e) => setPriorityFilter(e.target.value)}
                     >
                       <option value="all">All Priorities</option>
+                      <option value="low">Low</option>
                       <option value="normal">Normal</option>
                       <option value="high">High</option>
-                      <option value="emergency">Emergency</option>
+                      <option value="urgent">Urgent</option>
                     </select>
                   </div>
                 </div>
@@ -500,40 +600,107 @@ export default function CustomerDashboard({ user }) {
                   </div>
                 ) : (
                   <div ref={cardsContainerRef} className="grid gap-3.5">
-                    {filteredTickets.map((ticket) => (
-                      <div
-                        key={ticket._id}
-                        className="bg-gradient-to-br from-[#131c26] to-[#0f1722] border border-[#223142] border-l-4 border-l-sky-500 rounded-xl p-4 lg:p-5 transition-transform hover:-translate-y-0.5 hover:border-sky-500"
-                      >
-                        <div className="flex justify-between items-center flex-wrap gap-2 mb-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h2 className="m-0 text-white text-base font-bold">
-                              {ticket.title}
-                            </h2>
-                            <span className="bg-[#0d131a] text-sky-400 text-[10px] px-2.5 py-0.5 rounded-md border border-[#223142] font-bold">
-                              {ticket.category || 'General Support'}
-                            </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${
-                              ticket.priority === 'Emergency'
-                                ? 'bg-red-500/20 text-red-400'
-                                : ticket.priority === 'High'
-                                  ? 'bg-orange-500/20 text-orange-400'
+                    {filteredTickets.map((ticket) => {
+                      const isEditing = editingTicketId === ticket._id;
+                      const statusClean = String(ticket.status || 'Pending').toLowerCase();
+                      const isActionLocked = ['approved', 'rejected', 'in progress', 'completed'].includes(statusClean);
+
+                      return (
+                        <div
+                          key={ticket._id}
+                          className="bg-gradient-to-br from-[#131c26] to-[#0f1722] border border-[#223142] border-l-4 border-l-sky-500 rounded-xl p-4 lg:p-5 transition-transform hover:-translate-y-0.5 hover:border-sky-500"
+                        >
+                          <div className="flex justify-between items-center flex-wrap gap-2 mb-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {ticket.ticketNumber && (
+                                <span className="text-[11px] font-bold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 flex items-center gap-0.5">
+                                  <Hash size={11} />{ticket.ticketNumber}
+                                </span>
+                              )}
+
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editTitle}
+                                  onChange={(e) => setEditTitle(e.target.value)}
+                                  className="bg-[#0d131a] border border-[#223142] text-xs font-bold text-white p-1 rounded outline-none focus:border-sky-500"
+                                />
+                              ) : (
+                                <h2 className="m-0 text-white text-base font-bold">{ticket.title}</h2>
+                              )}
+
+                              <span className="bg-[#0d131a] text-slate-300 text-[10px] px-2.5 py-0.5 rounded-md border border-[#223142] font-bold">
+                                {ticket.category || 'Electrical'}
+                              </span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${
+                                ['Urgent', 'High'].includes(ticket.priority)
+                                  ? 'bg-red-500/20 text-red-400'
                                   : 'bg-slate-500/20 text-slate-300'
-                            }`}>
-                              {ticket.priority || 'Normal'} Priority
-                            </span>
+                              }`}>
+                                {ticket.priority || 'Normal'}
+                              </span>
+                            </div>
+
+                            {renderStatusBadge(ticket.status)}
                           </div>
 
-                          {renderStatusBadge(ticket.status)}
-                        </div>
+                          {isEditing ? (
+                            <textarea
+                              value={editDescription}
+                              onChange={(e) => setEditDescription(e.target.value)}
+                              className="w-full bg-[#0d131a] border border-[#223142] text-xs text-white p-2.5 rounded-lg outline-none focus:border-sky-500 my-2"
+                              rows={3}
+                            />
+                          ) : (
+                            <p className="m-0 text-slate-300 text-xs leading-relaxed bg-[#0d131a] p-2.5 rounded-lg border border-[#1a2634] my-2">
+                              {ticket.description}
+                            </p>
+                          )}
 
-                        <p className="m-0 text-slate-300 text-xs leading-relaxed bg-[#0d131a] p-2.5 rounded-lg border border-[#1a2634]">
-                          {ticket.description}
-                        </p>
-                      </div>
-                    ))}
+                          <div className="flex justify-between items-center flex-wrap gap-2 pt-2 border-t border-white/5 text-[11px] text-slate-400">
+                            <div className="flex items-center gap-3">
+                              <span>
+                                <strong className="text-slate-200">Assigned Tech:</strong> {ticket.assignedWorker?.name || ticket.assignedWorkerName || 'Unassigned'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {isEditing ? (
+                                <button
+                                  onClick={() => handleSaveEdit(ticket._id)}
+                                  className="bg-green-500 text-[#0d131a] px-2.5 py-1 rounded text-xs font-bold border-none cursor-pointer flex items-center gap-1"
+                                >
+                                  <Check size={12} /> Save
+                                </button>
+                              ) : !isActionLocked ? (
+                                <>
+                                  <button
+                                    onClick={() => handleStartEdit(ticket)}
+                                    className="bg-[#1a2634] text-sky-400 hover:text-white px-2 py-1 rounded text-xs font-bold border border-[#223142] cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Edit2 size={12} /> Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteTicket(ticket._id)}
+                                    className="bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2 py-1 rounded text-xs font-bold border border-red-500/30 cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Trash2 size={12} /> Delete
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                  <Lock size={10} /> Locked
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
+
               </motion.div>
             )}
           </AnimatePresence>

@@ -121,7 +121,7 @@ export default function WorkerDashboard({ user }) {
     } catch (err) {
       console.error('Fetch Assigned Tickets Error:', err);
       setTickets([]);
-    } finally {
+    } flex {
       setLoading(false);
     }
   }, []);
@@ -175,27 +175,36 @@ export default function WorkerDashboard({ user }) {
     window.location.href = '/login';
   };
 
-  const filteredTickets = tickets.filter((t) => {
-    const s = (t.status || 'Pending').toLowerCase();
-    const p = (t.priority || 'Normal').toLowerCase();
-    const c = (t.category || '').toLowerCase();
+  const filteredTickets = useMemo(() => {
+    return tickets.filter((t) => {
+      const s = (t.status || 'Pending').toLowerCase();
+      const p = (t.priority || 'Normal').toLowerCase();
+      const c = (t.category || '').toLowerCase();
 
-    if (statusFilter === 'pending' && s !== 'pending') return false;
-    if (statusFilter === 'approved' && !['approved', 'in progress', 'resolved'].includes(s)) return false;
-    if (statusFilter === 'rejected' && !['rejected', 'reject', 'closed'].includes(s)) return false;
+      if (statusFilter === 'pending' && s !== 'pending') return false;
+      if (statusFilter === 'approved' && !['approved', 'in progress', 'resolved'].includes(s)) return false;
+      if (statusFilter === 'rejected' && !['rejected', 'reject', 'closed'].includes(s)) return false;
 
-    if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
+      if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
 
-    if (categoryFilter !== 'All Categories') {
-      const selectedCat = categoryFilter.toLowerCase();
-      if (!c.includes(selectedCat.split(' ')[0])) return false;
-    }
+      if (categoryFilter !== 'All Categories') {
+        const selectedCat = categoryFilter.toLowerCase();
+        if (!c.includes(selectedCat.split(' ')[0])) return false;
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [tickets, statusFilter, priorityFilter, categoryFilter]);
 
-  const pendingCount = tickets.filter(t => (t.status || 'Pending').toLowerCase() === 'pending').length;
-  const approvedCount = tickets.filter(t => ['approved', 'in progress', 'resolved'].includes((t.status || '').toLowerCase())).length;
+  const pendingCount = useMemo(() => 
+    tickets.filter(t => (t.status || 'Pending').toLowerCase() === 'pending').length,
+    [tickets]
+  );
+  
+  const approvedCount = useMemo(() => 
+    tickets.filter(t => ['approved', 'in progress', 'resolved'].includes((t.status || '').toLowerCase())).length,
+    [tickets]
+  );
 
   const renderStatusBadge = (status = 'Pending') => {
     const s = status.toLowerCase();
