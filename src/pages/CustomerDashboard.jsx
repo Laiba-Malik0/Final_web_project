@@ -113,6 +113,7 @@ export default function CustomerDashboard({ user }) {
   const [priority, setPriority] = useState('Normal');
   const [description, setDescription] = useState('');
   const [selectedWorker, setSelectedWorker] = useState('');
+  const [preferredDate, setPreferredDate] = useState(new Date().toISOString().split('T')[0]);
   const [formMessage, setFormMessage] = useState(null);
 
   // Edit State
@@ -189,7 +190,8 @@ export default function CustomerDashboard({ user }) {
         priority,
         description,
         userName: currentUser.name,
-        assignedWorker: selectedWorker
+        assignedWorker: selectedWorker,
+        targetDate: preferredDate
       });
 
       setTitle('');
@@ -411,7 +413,7 @@ export default function CustomerDashboard({ user }) {
                     Lodge New Complaint
                   </h1>
                   <p className="text-slate-400 text-xs m-0 mt-1">
-                    Fill in details and assign a specialist field technician.
+                    Fill in details, select date and assign a specialist field technician.
                   </p>
                 </div>
 
@@ -426,6 +428,8 @@ export default function CustomerDashboard({ user }) {
                 )}
 
                 <form onSubmit={handleCreateTicket} className="bg-[#131c26] border border-[#223142] rounded-xl p-5 flex flex-col gap-4">
+                  
+                  {/* Row 1: Username & Target Date */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
@@ -433,12 +437,28 @@ export default function CustomerDashboard({ user }) {
                       </label>
                       <input
                         type="text"
-                        value={currentUser?.name || ''}
+                        value={currentUser?.name || 'Customer'}
                         readOnly
                         className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-slate-400 cursor-not-allowed outline-none"
                       />
                     </div>
 
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
+                        <Calendar size={12} className="text-sky-400" /> Scheduled Date *
+                      </label>
+                      <input
+                        type="date"
+                        value={preferredDate}
+                        onChange={(e) => setPreferredDate(e.target.value)}
+                        required
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Category & Worker Dropdown */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
                         <Tag size={12} className="text-sky-400" /> Category *
@@ -453,12 +473,10 @@ export default function CustomerDashboard({ user }) {
                         ))}
                       </select>
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1">
-                        <User size={12} className="text-sky-400" /> Assign Field Technician *
+                        <User size={12} className="text-sky-400" /> Select Worker / Technician *
                       </label>
                       <select
                         value={selectedWorker}
@@ -471,11 +489,26 @@ export default function CustomerDashboard({ user }) {
                         ) : (
                           workers.map((w) => (
                             <option key={w._id || w.id} value={w._id || w.id}>
-                              {w.name} ({w.department || 'General'})
+                              {w.name} ({w.department || 'General Worker'})
                             </option>
                           ))
                         )}
                       </select>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Priority & Problem Title */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">Problem Title *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Electrical wiring fault in AC unit"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        required
+                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
+                      />
                     </div>
 
                     <div>
@@ -495,18 +528,7 @@ export default function CustomerDashboard({ user }) {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Problem Title *</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Electrical wiring fault in AC unit"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      required
-                      className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
-                    />
-                  </div>
-
+                  {/* Row 4: Description */}
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-1">Problem Description *</label>
                     <textarea
@@ -662,6 +684,11 @@ export default function CustomerDashboard({ user }) {
                               <span>
                                 <strong className="text-slate-200">Assigned Tech:</strong> {ticket.assignedWorker?.name || ticket.assignedWorkerName || 'Unassigned'}
                               </span>
+                              {ticket.targetDate && (
+                                <span>
+                                  <strong className="text-slate-200">Scheduled Date:</strong> {ticket.targetDate}
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-2">
