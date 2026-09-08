@@ -121,7 +121,7 @@ export default function WorkerDashboard({ user }) {
     } catch (err) {
       console.error('Fetch Assigned Tickets Error:', err);
       setTickets([]);
-    } flex {
+    } finally {
       setLoading(false);
     }
   }, []);
