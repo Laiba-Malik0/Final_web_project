@@ -4,19 +4,11 @@ import gsap from 'gsap';
 import {
   LifeBuoy, CheckCircle, XCircle, Clock, RefreshCw, Mail,
   AlertCircle, LogOut, ChevronRight, Menu, X, LayoutDashboard,
-  ClipboardList, PlusCircle, Filter, Send, Tag, ShieldAlert,
-  User, Calendar, Trash2, Edit2, Check, Lock, Hash, Wrench
+  ClipboardList, Filter, Trash2, Edit2, Check, Lock, Hash, PlusCircle
 } from 'lucide-react';
 
 import API from '../api';
-
-const CATEGORIES = [
-  'Electrical',
-  'IT / Technical',
-  'General Support',
-  'Plumbing',
-  'Carpentry / Maintenance'
-];
+import CreateTicket from './CreateTicket'; // Make sure the path matches your project structure
 
 const SidebarContent = ({ currentUser, activeTab, setActiveTab, setSidebarOpen, ticketCount, handleLogout }) => (
   <div className="h-full flex flex-col justify-between">
@@ -53,7 +45,6 @@ const SidebarContent = ({ currentUser, activeTab, setActiveTab, setSidebarOpen, 
       <nav className="flex flex-col gap-1.5">
         {[
           { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
-          { id: 'new-ticket', label: 'Lodge Complaint', icon: PlusCircle },
           { id: 'my-tickets', label: `My Tickets (${ticketCount})`, icon: ClipboardList }
         ].map((item) => {
           const Icon = item.icon;
@@ -103,18 +94,10 @@ export default function CustomerDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
-  const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
 
-  // Form States
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState(CATEGORIES[0]);
-  const [priority, setPriority] = useState('Normal');
-  const [description, setDescription] = useState('');
-  const [selectedWorker, setSelectedWorker] = useState('');
-  const [preferredDate, setPreferredDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formMessage, setFormMessage] = useState(null);
+  // Modal State for Create Ticket Form
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Edit State
   const [editingTicketId, setEditingTicketId] = useState(null);
@@ -141,21 +124,9 @@ export default function CustomerDashboard({ user }) {
     }
   }, []);
 
-  const fetchWorkers = useCallback(async () => {
-    try {
-      const res = await API.get('/users/workers');
-      const rawWorkers = Array.isArray(res.data) ? res.data : (res.data?.workers || []);
-      setWorkers(rawWorkers);
-      if (rawWorkers.length > 0) setSelectedWorker(rawWorkers[0]._id || rawWorkers[0].id);
-    } catch (err) {
-      console.error('Fetch Workers Error:', err);
-    }
-  }, []);
-
   useEffect(() => {
     fetchMyTickets();
-    fetchWorkers();
-  }, [fetchMyTickets, fetchWorkers]);
+  }, [fetchMyTickets]);
 
   useEffect(() => {
     if (activeTab === 'my-tickets' && cardsContainerRef.current && !loading) {
@@ -172,42 +143,6 @@ export default function CustomerDashboard({ user }) {
       return () => ctx.revert();
     }
   }, [activeTab, loading, statusFilter, priorityFilter]);
-
-  const handleCreateTicket = async (e) => {
-    e.preventDefault();
-    if (!title.trim() || !description.trim() || !selectedWorker) {
-      setFormMessage({ type: 'error', text: 'Please fill in all required fields and select a worker.' });
-      return;
-    }
-
-    setSubmitting(true);
-    setFormMessage(null);
-
-    try {
-      await API.post('/tickets/create', {
-        title,
-        category,
-        priority,
-        description,
-        userName: currentUser.name,
-        assignedWorker: selectedWorker,
-        targetDate: preferredDate
-      });
-
-      setTitle('');
-      setDescription('');
-      setCategory(CATEGORIES[0]);
-      setPriority('Normal');
-      setFormMessage({ type: 'success', text: 'Complaint lodged successfully!' });
-      fetchMyTickets();
-      setTimeout(() => setActiveTab('my-tickets'), 1000);
-    } catch (err) {
-      console.error('Create Ticket Error:', err);
-      setFormMessage({ type: 'error', text: 'Failed to submit complaint. Please try again.' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleDeleteTicket = async (ticketId) => {
     if (!window.confirm('Are you sure you want to delete this complaint?')) return;
@@ -245,6 +180,11 @@ export default function CustomerDashboard({ user }) {
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = '/login';
+  };
+
+  const handleTicketCreated = (newTicket) => {
+    fetchMyTickets();
+    setActiveTab('my-tickets');
   };
 
   const filteredTickets = useMemo(() => {
@@ -303,7 +243,7 @@ export default function CustomerDashboard({ user }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#0d131a] text-slate-100 font-sans">
+    <div className="flex min-h-screen bg-[#0d131a] text-slate-100 font-sans relative">
       <aside className="hidden lg:flex w-64 bg-[#090d12] border-r border-[#1a2634] p-4 flex-col">
         <SidebarContent {...sidebarProps} />
       </aside>
@@ -394,178 +334,12 @@ export default function CustomerDashboard({ user }) {
                     <h3 className="m-0 text-white text-sm font-extrabold">Need Help with Something?</h3>
                     <p className="m-0 text-slate-400 text-xs mt-0.5">Submit a new complaint ticket directly to our designated technicians.</p>
                   </div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setActiveTab('new-ticket')}
-                    className="bg-sky-500 text-[#0d131a] border-none px-4 py-2 rounded-lg font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shadow-[0_4px_12px_rgba(14,165,233,0.3)]"
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="bg-sky-500 hover:bg-sky-400 text-[#0d131a] px-4 py-2 rounded-lg font-extrabold text-xs cursor-pointer flex items-center gap-2 transition-colors shadow-[0_0_12px_rgba(14,165,233,0.3)]"
                   >
-                    <PlusCircle size={15} /> Lodge Complaint
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Compact Card Layout for Complaint Form */}
-            {activeTab === 'new-ticket' && (
-              <motion.div 
-                key="new-ticket" 
-                initial={{ opacity: 0, y: 10 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -10 }}
-                className="max-w-2xl mx-auto py-2"
-              >
-                <div className="bg-[#131c26] border border-[#223142] rounded-2xl p-6 shadow-2xl">
-                  
-                  {/* Card Header */}
-                  <div className="border-b border-[#223142] pb-4 mb-5">
-                    <h1 className="text-white m-0 text-xl font-extrabold flex items-center gap-2">
-                      <PlusCircle className="text-sky-400" size={22} /> Lodge New Complaint
-                    </h1>
-                    <p className="text-slate-400 text-xs m-0 mt-1">
-                      Fill in the details below to assign a ticket directly to a field specialist.
-                    </p>
-                  </div>
-
-                  {formMessage && (
-                    <div className={`p-3 rounded-lg text-xs font-bold mb-4 border ${
-                      formMessage.type === 'error'
-                        ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                        : 'bg-green-500/10 border-green-500/30 text-green-400'
-                    }`}>
-                      {formMessage.text}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleCreateTicket} className="flex flex-col gap-4">
-                    
-                    {/* Field 1: Issue Subject / Title */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                        Issue Subject / Title *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Water Leakage in Main Restroom"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        required
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
-                      />
-                    </div>
-
-                    {/* Field 2 & 3: Category & Priority */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                          <Tag size={13} className="text-sky-400" /> Category
-                        </label>
-                        <select
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
-                        >
-                          {CATEGORIES.map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                          <ShieldAlert size={13} className="text-sky-400" /> Priority Level
-                        </label>
-                        <select
-                          value={priority}
-                          onChange={(e) => setPriority(e.target.value)}
-                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
-                        >
-                          <option value="Low">Low Priority</option>
-                          <option value="Normal">Normal Priority</option>
-                          <option value="High">High Priority</option>
-                          <option value="Urgent">Urgent</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Field 4 & 5: Customer Name & Target Date */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                          <User size={13} className="text-sky-400" /> Customer Name
-                        </label>
-                        <input
-                          type="text"
-                          value={currentUser?.name || 'Customer'}
-                          readOnly
-                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-slate-400 cursor-not-allowed outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                          <Calendar size={13} className="text-sky-400" /> Scheduled Date *
-                        </label>
-                        <input
-                          type="date"
-                          value={preferredDate}
-                          onChange={(e) => setPreferredDate(e.target.value)}
-                          required
-                          className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Field 6: Select Worker */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                        <Wrench size={13} className="text-sky-400" /> Assigned Worker / Technician *
-                      </label>
-                      <select
-                        value={selectedWorker}
-                        onChange={(e) => setSelectedWorker(e.target.value)}
-                        required
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 cursor-pointer"
-                      >
-                        {workers.length === 0 ? (
-                          <option value="">No Workers Available</option>
-                        ) : (
-                          workers.map((w) => (
-                            <option key={w._id || w.id} value={w._id || w.id}>
-                              {w.name} ({w.department || 'Field Technician'})
-                            </option>
-                          ))
-                        )}
-                      </select>
-                    </div>
-
-                    {/* Field 7: Detailed Explanation */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                        Detailed Explanation *
-                      </label>
-                      <textarea
-                        rows={4}
-                        placeholder="Provide specific details about the issue, location, or equipment involved..."
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        required
-                        className="w-full bg-[#0d131a] border border-[#223142] rounded-lg p-2.5 text-xs text-white outline-none focus:border-sky-500 transition-colors resize-y"
-                      />
-                    </div>
-
-                    <div className="flex justify-end pt-3">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        type="submit"
-                        disabled={submitting}
-                        className="bg-sky-500 hover:bg-sky-400 text-[#0d131a] border-none px-6 py-2.5 rounded-xl font-extrabold text-xs cursor-pointer flex items-center gap-2 shadow-[0_4px_12px_rgba(14,165,233,0.3)] disabled:opacity-50"
-                      >
-                        <Send size={14} /> {submitting ? 'Submitting...' : 'Submit Complaint'}
-                      </motion.button>
-                    </div>
-                  </form>
+                    <PlusCircle size={15} /> Create Ticket
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -582,13 +356,21 @@ export default function CustomerDashboard({ user }) {
                     </p>
                   </div>
 
-                  <button
-                    onClick={fetchMyTickets}
-                    disabled={loading}
-                    className="bg-[#131c26] border border-[#223142] text-sky-400 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-bold hover:bg-[#1a2634] transition-colors"
-                  >
-                    <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh List
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="bg-sky-500 hover:bg-sky-400 text-[#0d131a] px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-bold transition-colors"
+                    >
+                      <PlusCircle size={14} /> New Ticket
+                    </button>
+                    <button
+                      onClick={fetchMyTickets}
+                      disabled={loading}
+                      className="bg-[#131c26] border border-[#223142] text-sky-400 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 text-xs font-bold hover:bg-[#1a2634] transition-colors"
+                    >
+                      <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh List
+                    </button>
+                  </div>
                 </div>
 
                 <div className="bg-[#131c26] border border-[#223142] p-3 px-4 rounded-lg mb-4 flex items-center gap-4 flex-wrap">
@@ -698,9 +480,9 @@ export default function CustomerDashboard({ user }) {
                               <span>
                                 <strong className="text-slate-200">Assigned Tech:</strong> {ticket.assignedWorker?.name || ticket.assignedWorkerName || 'Unassigned'}
                               </span>
-                              {ticket.targetDate && (
+                              {(ticket.targetDate || ticket.date) && (
                                 <span>
-                                  <strong className="text-slate-200">Scheduled Date:</strong> {ticket.targetDate}
+                                  <strong className="text-slate-200">Scheduled Date:</strong> {ticket.targetDate || ticket.date}
                                 </span>
                               )}
                             </div>
@@ -747,6 +529,28 @@ export default function CustomerDashboard({ user }) {
           </AnimatePresence>
         </main>
       </div>
+
+      {/* Modal Popup for Ticket Creation */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-xl"
+            >
+              <CreateTicket
+                user={currentUser}
+                onSuccess={(newTicket) => {
+                  handleTicketCreated(newTicket);
+                }}
+                onClose={() => setShowCreateModal(false)}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
