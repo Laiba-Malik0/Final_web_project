@@ -60,8 +60,18 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
     };
   }, []);
 
+  // Category change hone par assigned worker auto reset hoga
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'category') {
+      setFormData({
+        ...formData,
+        category: value,
+        assignedWorker: '' // Category badalney par assigned worker reset ho jayega
+      });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -78,6 +88,19 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
       if (onClose) onClose();
     }
   };
+
+  // Selected Category ke basis par workers list filter karne ka logic
+  const filteredWorkers = workersList.filter((worker) => {
+    if (!formData.category) return true;
+
+    const workerSpec = (worker.specialization || worker.department || '').toLowerCase().trim();
+    const selectedCat = formData.category.toLowerCase().trim();
+
+    if (!workerSpec) return false;
+
+    // Match conditions (Exact ya Substring match)
+    return workerSpec.includes(selectedCat) || selectedCat.includes(workerSpec);
+  });
 
   const inputStyles = "w-full bg-[#080a0f] border border-slate-800 rounded-lg px-3 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-sky-400 transition-colors";
 
@@ -149,6 +172,9 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
               <option value="Plumbing Fix">Plumbing Fix</option>
               <option value="Electrical Issue">Electrical Issue</option>
               <option value="Carpentry">Carpentry</option>
+              <option value="AC Repair">AC Repair</option>
+              <option value="Appliance Repair">Appliance Repair</option>
+              <option value="Cleaning">Cleaning</option>
               <option value="General Maintenance">General Maintenance</option>
             </select>
           </div>
@@ -187,10 +213,11 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
           </div>
         </div>
 
-        {/* Worker Field (Fetched from MongoDB) */}
+        {/* Worker Field (Filtered based on Category) */}
         <div>
           <label className="text-[11px] text-slate-300 mb-1 font-bold flex items-center gap-1.5">
-            <Wrench size={13} className="text-sky-400" /> Assigned Worker
+            <Wrench size={13} className="text-sky-400" /> Assigned Worker 
+            {formData.category && <span className="text-sky-400">({formData.category})</span>}
           </label>
           <select 
             name="assignedWorker" 
@@ -202,13 +229,13 @@ export default function CreateTicket({ user, onSuccess, onClose }) {
             <option value="">
               {loadingWorkers 
                 ? 'Loading workers...' 
-                : workersList.length === 0 
-                  ? 'No workers available' 
-                  : '-- Select Assigned Worker --'}
+                : filteredWorkers.length === 0 
+                  ? `No ${formData.category || ''} specialists available` 
+                  : `-- Select ${formData.category || ''} Worker --`}
             </option>
-            {workersList.map((w) => (
+            {filteredWorkers.map((w) => (
               <option key={w._id || w.id} value={w._id || w.id}>
-                {w.name} ({w.specialization || w.role || 'Technician'})
+                {w.name} {w.specialization ? `(${w.specialization})` : ''}
               </option>
             ))}
           </select>

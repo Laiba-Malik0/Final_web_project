@@ -12,13 +12,23 @@ function Login() {
   const [activeRole, setActiveRole] = useState("customer");
   const [isLogin, setIsLogin] = useState(true);
 
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const [formData, setFormData] = useState({ name: "", email: "", password: "", specialization: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [otpStep, setOtpStep] = useState(0);
   const [resetData, setResetData] = useState({ email: "", otp: "", newPassword: "" });
   const [modalMsg, setModalMsg] = useState("");
+
+  const categories = [
+    "Plumbing Fix",
+    "Electrical Issue",
+    "Carpentry",
+    "AC Repair",
+    "Appliance Repair",
+    "Cleaning",
+    "General Maintenance"
+  ];
 
   useEffect(() => {
     if (user) {
@@ -34,10 +44,10 @@ function Login() {
     setError("");
 
     if (role === "admin") {
-      setFormData({ name: "", email: "admin@supportsphere.com", password: "admin123" });
+      setFormData({ name: "", email: "admin@supportsphere.com", password: "", specialization: "" });
       setIsLogin(true);
     } else {
-      setFormData({ name: "", email: "", password: "" });
+      setFormData({ name: "", email: "", password: "", specialization: "" });
     }
   };
 
@@ -72,11 +82,12 @@ function Login() {
           email: cleanEmail,
           password: cleanPassword,
           role: activeRole,
+          specialization: activeRole === "worker" ? formData.specialization : ""
         });
 
         alert(`${activeRole.toUpperCase()} Account Created Successfully! Please Sign In.`);
         setIsLogin(true);
-        setFormData({ name: "", email: cleanEmail, password: "" });
+        setFormData({ name: "", email: cleanEmail, password: "", specialization: "" });
       }
     } catch (err) {
       console.error("Auth error:", err.response);
@@ -246,6 +257,28 @@ function Login() {
                     placeholder="e.g. Alex Morgan"
                     className={inputStyle}
                   />
+                </div>
+              )}
+
+              {/* Worker Role Specialization Selector (Only in Registration) */}
+              {!isLogin && activeRole === "worker" && (
+                <div>
+                  <label className="text-[10px] sm:text-[11px] uppercase font-bold text-[#cbd5e1] tracking-wider block mb-1">
+                    Specialization / Skill
+                  </label>
+                  <select
+                    required
+                    value={formData.specialization}
+                    onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                    className={`${inputStyle} cursor-pointer`}
+                  >
+                    <option value="">-- Select Specialization --</option>
+                    {categories.map((cat, i) => (
+                      <option key={i} value={cat} className="bg-[#0f172a] text-white">
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
