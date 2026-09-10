@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import {
   ShieldCheck, CheckCircle, XCircle, Clock, RefreshCw, User, Mail,
   AlertCircle, LogOut, ChevronRight, Menu, X, LayoutDashboard,
-  ClipboardList, Wrench, Search, Cpu, Database
+  ClipboardList, Wrench, Search, Cpu, Database, Award
 } from 'lucide-react';
 
 import API from '../api'; 
@@ -566,7 +566,9 @@ export default function AdminDashboard() {
                               >
                                 <option value="">Unassigned</option>
                                 {workers.map((w) => (
-                                  <option key={w._id} value={w._id}>{w.name} ({w.category || 'General'})</option>
+                                  <option key={w._id} value={w._id}>
+                                    {w.name} ({w.specialization || w.category || 'General'})
+                                  </option>
                                 ))}
                               </select>
                             </div>
@@ -624,11 +626,18 @@ export default function AdminDashboard() {
                         </div>
                         <div className="min-w-0">
                           <h3 className="m-0 text-white text-sm font-bold truncate">{w.name}</h3>
-                          <span className="text-[10px] text-cyan-400 font-bold block truncate">{w.category || 'Technician'}</span>
+                          <span className="text-[10px] text-cyan-400 font-bold block truncate">
+                            {w.specialization || w.category || 'General Technician'}
+                          </span>
                         </div>
                       </div>
-                      <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-800 pt-2.5">
+                      <div className="text-xs text-slate-500 flex flex-col gap-1.5 border-t border-slate-800 pt-2.5">
                         <span className="truncate"><strong className="text-slate-100">Email:</strong> {w.email}</span>
+                        <span className="flex items-center gap-1">
+                          <Award size={12} className="text-amber-400 shrink-0" />
+                          <strong className="text-slate-100">Specialization:</strong> 
+                          <span className="text-amber-400 font-semibold">{w.specialization || 'Not Specified'}</span>
+                        </span>
                         <span><strong className="text-slate-100">Role:</strong> {w.role}</span>
                       </div>
                     </div>

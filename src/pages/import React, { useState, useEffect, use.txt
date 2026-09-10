@@ -1,0 +1,624 @@
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
+import gsap from 'gsap';
+import { 
+  HardHat, 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  RefreshCw, 
+  User, 
+  Mail, 
+  Shield, 
+  AlertCircle,
+  LogOut,
+  ChevronRight,
+  Menu,
+  X,
+  LayoutDashboard,
+  ClipboardList,
+  Filter,
+  ArrowRight
+} from 'lucide-react';
+
+const API = axios.create({ baseURL: 'http://localhost:5000/api' });
+
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+export default function WorkerDashboard({ user }) {
+  const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+  const currentUser = user || storedUser || { name: 'Kulsoom', email: 'kulsoom@sphere.com', role: 'Worker' };
+
+  // Active Tab State: 'dashboard' or 'complaints'
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Data States
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState(null);
+
+  // Filters State
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
+  // GSAP Container Refs
+  const welcomeRef = useRef(null);
+  const cardsContainerRef = useRef(null);
+
+  // Fetch Tickets from Backend (Assigned to logged-in worker)
+  const fetchWorkerTickets = async () => {
+    setLoading(true);
+    try {
+      const res = await API.get('/tickets/my-assigned');
+      setTickets(res.data || []);
+    } catch (err) {
+      console.error('Fetch Error:', err);
+      // Fallback Data for UI testing
+      setTickets([
+        {
+          _id: '101',
+          title: 'Plumbing Leakage Fix',
+          category: 'Plumbing Fix',
+          priority: 'Emergency',
+          status: 'Pending',
+          description: 'Water leaking continuously in room 302 bathroom faucet. Please repair as soon as possible.',
+          userName: 'Laiba',
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkerTickets();
+  }, []);
+
+  // GSAP Smooth Stagger Animations
+  useEffect(() => {
+    if (activeTab === 'dashboard' && welcomeRef.current) {
+      gsap.fromTo(
+        welcomeRef.current.children, 
+        { opacity: 0, y: 25 }, 
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.12, ease: 'power3.out' }
+      );
+    }
+    if (activeTab === 'complaints' && cardsContainerRef.current && !loading) {
+      gsap.fromTo(
+        cardsContainerRef.current.children, 
+        { opacity: 0, y: 20 }, 
+        { opacity: 1, y: 0, duration: 0.45, stagger: 0.1, ease: 'power2.out' }
+      );
+    }
+  }, [activeTab, loading]);
+
+  // Handle Approve / Reject Actions with Backend Sync
+  const handleStatusChange = async (ticketId, newStatus) => {
+    setUpdatingId(ticketId);
+    try {
+      await API.patch(`/tickets/${ticketId}/status`, { status: newStatus });
+      setTickets((prev) =>
+        prev.map((t) => (t._id === ticketId ? { ...t, status: newStatus } : t))
+      );
+    } catch (err) {
+      console.error('Update Error:', err);
+      setTickets((prev) =>
+        prev.map((t) => (t._id === ticketId ? { ...t, status: newStatus } : t))
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.href = '/login';
+  };
+
+  // Categories Dropdown List
+  const categoriesList = ['all', ...Array.from(new Set(tickets.map(t => t.category).filter(Boolean)))];
+
+  // Filtering Logic
+  const filteredTickets = tickets.filter((t) => {
+    const s = t.status?.toLowerCase() || '';
+    const p = t.priority?.toLowerCase() || '';
+    const c = t.category?.toLowerCase() || '';
+
+    if (statusFilter === 'pending' && s !== 'pending') return false;
+    if (statusFilter === 'approved' && (s !== 'approved' && s !== 'in progress' && s !== 'resolved')) return false;
+    if (statusFilter === 'rejected' && (s !== 'rejected' && s !== 'closed')) return false;
+
+    if (priorityFilter !== 'all' && p !== priorityFilter.toLowerCase()) return false;
+    if (categoryFilter !== 'all' && c !== categoryFilter.toLowerCase()) return false;
+
+    return true;
+  });
+
+  // Welcome Screen Metrics
+  const pendingCount = tickets.filter(t => t.status?.toLowerCase() === 'pending').length;
+  const approvedCount = tickets.filter(t => ['approved', 'in progress', 'resolved'].includes(t.status?.toLowerCase())).length;
+
+  // Status Badge with Pulse Sensors
+  const renderStatusBadge = (status = 'Pending') => {
+    const s = status.toLowerCase();
+    
+    if (s === 'approved' || s === 'in progress' || s === 'resolved') {
+      return (
+        <span style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.35)', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span className="pulse-sensor green"></span>
+          <CheckCircle size={15} /> Approved
+        </span>
+      );
+    }
+    if (s === 'rejected' || s === 'closed') {
+      return (
+        <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.35)', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span className="pulse-sensor red"></span>
+          <XCircle size={15} /> Rejected
+        </span>
+      );
+    }
+    return (
+      <span style={{ backgroundColor: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.35)', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+        <span className="pulse-sensor yellow"></span>
+        <Clock size={15} /> Pending
+      </span>
+    );
+  };
+
+  const SidebarContent = () => (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      <div>
+        {/* SupportSphere Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px', paddingLeft: '4px' }}>
+          <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '12px', display: 'flex', boxShadow: '0 4px 14px rgba(255, 255, 255, 0.15)' }}>
+            <HardHat size={22} color="#0f172a" />
+          </div>
+          <div>
+            <h2 className="heading-font" style={{ fontSize: '18px', fontWeight: '800', color: '#ffffff', margin: 0, letterSpacing: '0.8px' }}>
+              SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span>
+            </h2>
+            <span style={{ fontSize: '10px', color: '#64748b', letterSpacing: '1.5px', textTransform: 'uppercase', fontWeight: '700' }}>Worker Portal</span>
+          </div>
+        </div>
+
+        {/* Worker Info Box */}
+        <div style={{ backgroundColor: '#1e293b', padding: '16px 18px', borderRadius: '14px', border: '1px solid #334155', marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <div style={{ backgroundColor: '#ffffff', width: '42px', height: '42px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', color: '#0f172a', fontSize: '16px', fontFamily: 'Outfit' }}>
+              {currentUser?.name ? currentUser.name[0].toUpperCase() : 'W'}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <p style={{ margin: 0, fontWeight: '700', color: '#f8fafc', fontSize: '15px' }}>{currentUser?.name || 'Worker'}</p>
+              <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span className="pulse-sensor cyan"></span> Field Technician
+              </span>
+            </div>
+          </div>
+          <div style={{ fontSize: '11px', color: '#94a3b8', borderTop: '1px solid #334155', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={13} color="#64748b" /> {currentUser?.email || 'worker@sphere.com'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Shield size={13} color="#64748b" /> Verified Worker</span>
+          </div>
+        </div>
+
+        {/* Sidebar Nav Buttons */}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button 
+            onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderRadius: '10px', border: 'none',
+              backgroundColor: activeTab === 'dashboard' ? '#ffffff' : 'transparent',
+              color: activeTab === 'dashboard' ? '#0f172a' : '#94a3b8',
+              fontWeight: '700', fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <LayoutDashboard size={18} /> Overview
+            </div>
+            <ChevronRight size={16} />
+          </button>
+
+          <button 
+            onClick={() => { setActiveTab('complaints'); setSidebarOpen(false); }}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderRadius: '10px', border: 'none',
+              backgroundColor: activeTab === 'complaints' ? '#ffffff' : 'transparent',
+              color: activeTab === 'complaints' ? '#0f172a' : '#94a3b8',
+              fontWeight: '700', fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <ClipboardList size={18} /> Complaints Queue ({tickets.length})
+            </div>
+            <ChevronRight size={16} />
+          </button>
+        </nav>
+      </div>
+
+      {/* Logout */}
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={handleLogout}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px',
+          borderRadius: '10px', border: 'none', backgroundColor: '#ef4444',
+          color: '#ffffff', cursor: 'pointer', fontWeight: '700', fontSize: '13px',
+          boxShadow: '0 4px 16px rgba(239, 68, 68, 0.35)', marginTop: '20px'
+        }}
+      >
+        <LogOut size={16} /> Log Out
+      </motion.button>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0b1120', color: '#f8fafc', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        
+        .heading-font { font-family: 'Outfit', sans-serif; }
+
+        .complaint-card {
+          background: linear-gradient(145deg, #1e293b 0%, #151f30 100%);
+          border: 1px solid #334155;
+          border-radius: 18px;
+          padding: 26px 30px;
+          transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+        .complaint-card:hover {
+          transform: translateY(-4px);
+          border-color: #475569;
+          box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .filter-select {
+          background-color: #0b1120;
+          color: #f8fafc;
+          border: 1px solid #334155;
+          border-radius: 8px;
+          padding: 8px 14px;
+          font-size: 13px;
+          font-weight: 600;
+          outline: none;
+          cursor: pointer;
+        }
+
+        /* Pulsing Sensors CSS */
+        .pulse-sensor {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          display: inline-block;
+        }
+        .pulse-sensor.yellow { backgroundColor: #facc15; box-shadow: 0 0 10px #facc15; animation: pulseYellow 1.5s infinite; }
+        .pulse-sensor.green { backgroundColor: #4ade80; box-shadow: 0 0 10px #4ade80; animation: pulseGreen 1.5s infinite; }
+        .pulse-sensor.red { backgroundColor: #f87171; box-shadow: 0 0 10px #f87171; animation: pulseRed 1.5s infinite; }
+        .pulse-sensor.cyan { backgroundColor: #38bdf8; box-shadow: 0 0 10px #38bdf8; animation: pulseCyan 1.5s infinite; }
+
+        @keyframes pulseYellow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } }
+        @keyframes pulseGreen { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } }
+        @keyframes pulseRed { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } }
+        @keyframes pulseCyan { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } }
+
+        @media (max-width: 850px) {
+          .desktop-sidebar { display: none !important; }
+          .mobile-header { display: flex !important; }
+          .main-content { padding: 20px 16px !important; }
+        }
+        @media (min-width: 851px) {
+          .desktop-sidebar { display: flex !important; }
+          .mobile-header { display: none !important; }
+        }
+      `}</style>
+
+      {/* --- DESKTOP SIDEBAR --- */}
+      <aside className="desktop-sidebar" style={{ width: '280px', backgroundColor: '#0f172a', borderRight: '1px solid #1e293b', padding: '28px 20px', flexDirection: 'column' }}>
+        <SidebarContent />
+      </aside>
+
+      {/* --- MOBILE HAMBURGER HEADER --- */}
+      <div className="mobile-header" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '60px', backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', zIndex: 99 }}>
+        <button 
+          onClick={() => setSidebarOpen(true)} 
+          style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer' }}
+        >
+          <Menu size={24} />
+        </button>
+        <h2 className="heading-font" style={{ fontSize: '18px', fontWeight: '800', color: '#ffffff', margin: 0 }}>
+          SUPPORT<span style={{ color: '#38bdf8' }}>SPHERE</span>
+        </h2>
+        <div style={{ width: 24 }}></div>
+      </div>
+
+      {/* --- MOBILE DRAWER --- */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 100 }}
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '280px', backgroundColor: '#0f172a', borderRight: '1px solid #1e293b', padding: '20px', zIndex: 101 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                <button onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                  <X size={22} />
+                </button>
+              </div>
+              <SidebarContent />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* --- MAIN CONTENT AREA --- */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <main className="main-content" style={{ padding: '36px 44px', flex: 1, overflowY: 'auto', maxWidth: '1250px', margin: '0 auto', width: '100%', paddingTop: '80px' }}>
+          
+          <AnimatePresence mode="wait">
+            
+            {/* TAB 1: WELCOME SCREEN */}
+            {activeTab === 'dashboard' && (
+              <div key="welcome" ref={welcomeRef}>
+                
+                {/* Hero Banner */}
+                <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '20px', padding: '36px 40px', marginBottom: '28px', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+                    <div style={{ backgroundColor: '#38bdf8', padding: '14px', borderRadius: '16px', display: 'flex' }}>
+                      <HardHat size={32} color="#0f172a" />
+                    </div>
+                    <div>
+                      <h1 className="heading-font" style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#ffffff' }}>
+                        Welcome back, {currentUser?.name || 'Worker'}!
+                      </h1>
+                      <p style={{ margin: '6px 0 0 0', color: '#94a3b8', fontSize: '15px' }}>
+                        Here is your live field operations overview and complaints assigned by customers.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Big Metric Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+                  <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', padding: '24px 28px', borderRadius: '18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: '600' }}>Assigned Complaints</span>
+                      <ClipboardList size={22} color="#38bdf8" />
+                    </div>
+                    <p className="heading-font" style={{ fontSize: '36px', fontWeight: '800', margin: '14px 0 0 0', color: '#ffffff' }}>
+                      {tickets.length}
+                    </p>
+                  </div>
+
+                  <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', padding: '24px 28px', borderRadius: '18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: '600' }}>Pending Action</span>
+                      <Clock size={22} color="#facc15" />
+                    </div>
+                    <p className="heading-font" style={{ fontSize: '36px', fontWeight: '800', margin: '14px 0 0 0', color: '#facc15' }}>
+                      {pendingCount}
+                    </p>
+                  </div>
+
+                  <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', padding: '24px 28px', borderRadius: '18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: '600' }}>Approved / Resolved</span>
+                      <CheckCircle size={22} color="#4ade80" />
+                    </div>
+                    <p className="heading-font" style={{ fontSize: '36px', fontWeight: '800', margin: '14px 0 0 0', color: '#4ade80' }}>
+                      {approvedCount}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Direct Action Card */}
+                <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', padding: '28px 32px', borderRadius: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                  <div>
+                    <h3 className="heading-font" style={{ margin: 0, color: '#ffffff', fontSize: '20px', fontWeight: '700' }}>Review & Manage Complaints</h3>
+                    <p style={{ margin: '6px 0 0 0', color: '#94a3b8', fontSize: '14px' }}>Access complaints registered by users (e.g., Laiba) and update their status.</p>
+                  </div>
+                  <motion.button 
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setActiveTab('complaints')}
+                    style={{ backgroundColor: '#ffffff', color: '#0f172a', border: 'none', padding: '14px 28px', borderRadius: '12px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    Go To Queue <ArrowRight size={18} />
+                  </motion.button>
+                </div>
+
+              </div>
+            )}
+
+            {/* TAB 2: COMPLAINTS QUEUE SCREEN */}
+            {activeTab === 'complaints' && (
+              <div key="complaints">
+                
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                  <div>
+                    <h1 className="heading-font" style={{ color: '#ffffff', margin: '0 0 6px 0', fontSize: '28px', fontWeight: '800', letterSpacing: '-0.5px' }}>
+                      Assigned Complaint Queue
+                    </h1>
+                    <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+                      Manage & update complaints assigned specifically to your account.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={fetchWorkerTickets}
+                    disabled={loading}
+                    style={{ background: '#1e293b', border: '1px solid #334155', color: '#38bdf8', padding: '10px 18px', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '700' }}
+                  >
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh List
+                  </button>
+                </div>
+
+                {/* Filters Toolbar */}
+                <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', padding: '16px 20px', borderRadius: '16px', marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                  
+                  {/* Status Filter Tabs */}
+                  <div style={{ display: 'flex', backgroundColor: '#0b1120', padding: '4px', borderRadius: '10px', border: '1px solid #334155' }}>
+                    {['all', 'pending', 'approved', 'rejected'].map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setStatusFilter(tab)}
+                        style={{
+                          padding: '7px 16px', borderRadius: '8px', border: 'none', fontSize: '12px', fontWeight: '700', textTransform: 'capitalize', cursor: 'pointer',
+                          backgroundColor: statusFilter === tab ? '#ffffff' : 'transparent',
+                          color: statusFilter === tab ? '#0f172a' : '#94a3b8', transition: 'all 0.2s'
+                        }}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Dropdown Filters */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Filter size={15} color="#94a3b8" />
+                      <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '600' }}>Priority:</span>
+                      <select 
+                        className="filter-select"
+                        value={priorityFilter} 
+                        onChange={(e) => setPriorityFilter(e.target.value)}
+                      >
+                        <option value="all">All Priorities</option>
+                        <option value="emergency">Emergency</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '600' }}>Category:</span>
+                      <select 
+                        className="filter-select"
+                        value={categoryFilter} 
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                      >
+                        {categoriesList.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat === 'all' ? 'All Categories' : cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Complaints List Cards */}
+                {loading ? (
+                  <p style={{ color: '#94a3b8', fontSize: '14px' }}>Loading complaints from Database...</p>
+                ) : filteredTickets.length === 0 ? (
+                  <div style={{ backgroundColor: '#1e293b', border: '1px dashed #334155', borderRadius: '16px', padding: '50px', textAlign: 'center', color: '#94a3b8' }}>
+                    <AlertCircle size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                    <p style={{ margin: 0, fontSize: '15px' }}>No complaints found under current filter criteria.</p>
+                  </div>
+                ) : (
+                  <div ref={cardsContainerRef} style={{ display: 'grid', gap: '20px' }}>
+                    {filteredTickets.map((ticket) => (
+                      <div key={ticket._id} className="complaint-card">
+                        
+                        {/* Title & Priority Row */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            <h2 className="heading-font" style={{ margin: 0, color: '#ffffff', fontSize: '20px', fontWeight: '700' }}>
+                              {ticket.title}
+                            </h2>
+                            
+                            <span style={{ backgroundColor: '#0b1120', color: '#cbd5e1', fontSize: '12px', padding: '4px 12px', borderRadius: '8px', border: '1px solid #334155', fontWeight: '600' }}>
+                              {ticket.category || 'General Support'}
+                            </span>
+
+                            <span style={{ 
+                              backgroundColor: ticket.priority === 'Emergency' ? 'rgba(239, 68, 68, 0.18)' : ticket.priority === 'High' ? 'rgba(249, 115, 22, 0.18)' : 'rgba(148, 163, 184, 0.15)',
+                              color: ticket.priority === 'Emergency' ? '#f87171' : ticket.priority === 'High' ? '#fb923c' : '#cbd5e1',
+                              fontSize: '11px', padding: '4px 10px', borderRadius: '8px', fontWeight: '700', textTransform: 'uppercase'
+                            }}>
+                              {ticket.priority || 'Normal'} Priority
+                            </span>
+                          </div>
+
+                          {renderStatusBadge(ticket.status)}
+                        </div>
+
+                        {/* Complaint Description */}
+                        <p style={{ margin: '0 0 18px 0', color: '#cbd5e1', fontSize: '14px', lineHeight: '1.6', backgroundColor: '#0b1120', padding: '14px 18px', borderRadius: '12px', border: '1px solid #1e293b' }}>
+                          {ticket.description}
+                        </p>
+
+                        {/* Customer Info & Action Buttons */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#94a3b8' }}>
+                            <User size={15} color="#38bdf8" /> <strong style={{ color: '#f8fafc' }}>Customer:</strong> {ticket.userName || 'Laiba'}
+                          </span>
+
+                          <div style={{ display: 'flex', gap: '10px', minWidth: '220px' }}>
+                            <motion.button 
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => handleStatusChange(ticket._id, 'Approved')}
+                              disabled={updatingId === ticket._id || ticket.status === 'Approved'}
+                              style={{
+                                flex: 1, padding: '10px 20px', borderRadius: '10px', border: 'none', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
+                                backgroundColor: ticket.status === 'Approved' ? 'rgba(34, 197, 94, 0.2)' : '#22c55e',
+                                color: ticket.status === 'Approved' ? '#4ade80' : '#0f172a',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                              }}
+                            >
+                              <CheckCircle size={15} /> {updatingId === ticket._id ? 'Updating...' : 'Approve'}
+                            </motion.button>
+
+                            <motion.button 
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => handleStatusChange(ticket._id, 'Rejected')}
+                              disabled={updatingId === ticket._id || ticket.status === 'Rejected'}
+                              style={{
+                                flex: 1, padding: '10px 20px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.4)', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
+                                backgroundColor: ticket.status === 'Rejected' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)',
+                                color: '#f87171',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                              }}
+                            >
+                              <XCircle size={15} /> {updatingId === ticket._id ? 'Updating...' : 'Reject'}
+                            </motion.button>
+                          </div>
+                        </div>
+
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              </div>
+            )}
+
+          </AnimatePresence>
+        </main>
+      </div>
+    </div>
+  );
+}
